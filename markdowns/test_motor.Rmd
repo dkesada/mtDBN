@@ -1,0 +1,111 @@
+---
+title: "Full motor dataset"
+author: "David Quesada"
+date: "6/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tests and debug
+
+```{r imports}
+library(mtDBN)
+library(data.table)
+library(dbnR)
+```
+
+Test and debug chunks for the mtDBN model.
+
+* First, model fitting:
+
+```{r innit}
+setwd("C:/Users/Quesada/Downloads/archive")
+dt <- data.table::fread("pmsm_temperature_data.csv") # 0.5 secs between rows
+```
+
+```{r dataset_treatment}
+reduce_freq <- function(dt, obj_freq, curr_freq = 0.5){
+  dt_res <- copy(dt)
+  n_rows <- ceiling(obj_freq / curr_freq)
+  obj_rows <- seq(1, dim(dt_res)[1], n_rows)
+  idx_vec <- as.vector(sapply(obj_rows, function(x, times){rep(x,times)}, times=n_rows))[1:dim(dt_res)[1]]
+  dt_res[, idx := idx_vec]
+  dt_res <- dt_res[, lapply(.SD, mean), by=c("idx","profile_id")]
+  dt_res[, idx := NULL]
+  
+  return(dt_res)
+}
+
+filter_same_cycle <- function(f_dt, size, id_var){
+  cond <- Reduce(function(acu, x){paste0(acu, " & ", id_var, "_t_0 == ", id_var, "_t_", x)}, seq_len(size-2)+1,
+                 init = paste0(id_var, "_t_0 == ", id_var, "_t_1"))
+  return(f_dt[eval(parse(text=cond))])
+}
+
+shift_diff_dt <- function(dt, obj_cols, id_col = NULL){
+  dt[, (obj_cols) := lapply(.SD, function(x){c(x[1:(length(x)-1)] - x[2:length(x)],NA)}), .SDcols = obj_cols]
+  dt <- dt[1:(dim(dt)[1]-1)]
+  if(!is.null(id_col))
+    dt <- dt[get(id_col) == shift(get(id_col), -1)]
+}
+
+dt[, torque := NULL]
+dt <- reduce_freq(dt, 30, 0.5)
+obj_vars <- c("stator_yoke", "stator_winding", "stator_tooth", "pm")
+dt <- shift_diff_dt(dt, obj_vars, id_col = "profile_id")
+plot(ts(dt$pm))
+pred_vars <- names(dt)[!(names(dt) %in% obj_vars)]
+test_id <- c(65, 72)
+dt_train <- dt[!(profile_id %in% test_id)]
+dt_test <- dt[profile_id %in% test_id]
+
+size <- 3
+id_var <- "profile_id"
+
+f_dt_train <- dbnR::fold_dt(dt_train, size)
+f_dt_train <- filter_same_cycle(f_dt_train, size, id_var)
+del_vars <- names(f_dt_train)[grepl(id_var, names(f_dt_train))]
+f_dt_train[, (del_vars) := NULL]
+f_dt_test <- dbnR::fold_dt(dt_test, size)
+f_dt_test <- filter_same_cycle(f_dt_test, size, id_var)
+f_dt_test[, (del_vars) := NULL]
+dt_train[, profile_id := NULL]
+dt_test[, profile_id := NULL]
+```
+
+```{r fit_network}
+model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 50, n_ind = 100)
+model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+model <- mtDBN::mtDBN$new()
+model$fit_model(dt_train, size, method = "psoho", obj_var = "pm", min_ind = 80, max_depth = 6, f_dt = f_dt_train, n_it = 50, n_ind = 100)
+
+```
+
+* Second, forecasting 
+
+```{r forecasting}
+ini <- 50
+len <- 100
+
+obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
+ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
+res_net <- dbnR::forecast_ts(f_dt_test, model_fit, 3, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+res <- model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+
+plot(ts(f_dt_test[ini:(ini+len),pm_t_0]))
+lines(res$pm_t_0, col = "blue")
+
+plot(ts(f_dt_test[ini:(ini+len), stator_tooth_t_0]))
+lines(res$stator_tooth_t_0, col = "blue")
+
+plot(ts(f_dt_test[ini:(ini+len), stator_winding_t_0]))
+lines(res$stator_winding_t_0, col = "blue")
+
+plot(ts(f_dt_test[ini:(ini+len),stator_yoke_t_0]))
+lines(res$stator_yoke_t_0, col = "blue")
+```

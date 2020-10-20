@@ -1,0 +1,22 @@
+Package: mtDBN
+Type: Package
+Title: Model Tree Dynamic Bayesian Network Learning and Inference
+Version: 0.0.0.9000
+Date: 2020-09-17
+Author: David Quesada
+Maintainer: David Quesada <dkesada@gmail.com>
+Description: A combination of model trees and dynamic Bayesian networks that
+    aims to overcome some of the flaws of DBNs when forecasting time-series.
+License: MIT + file LICENSE
+Depends: R (>= 3.5.0)
+Imports: dbnR (>= 0.4.5),
+  data.table (>= 1.12.4),
+  R6 (>= 2.4.1),
+  rpart (>= 4.1-15),
+  treeClust (>= 1.1-7)
+Encoding: UTF-8
+RoxygenNote: 7.1.1
+Suggests: 
+    testthat
+Roxygen: list(r6 = TRUE)
+LazyData: true

@@ -1,0 +1,40 @@
+---
+title: "tests"
+author: "David Quesada"
+date: "30/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tests and debug
+
+```{r imports}
+library(mtDBN)
+library(data.table)
+
+```
+
+Test and debug chunks for the mtDBN model.
+
+* First, model fitting:
+
+```{r innit}
+dt <- dbnR::motor
+size <- 3
+f_dt <- dbnR::fold_dt(dt, size)
+model <- mtDBN::mtDBN$new()
+model$fit_model(dt, size, method = "dmmhc", obj_var = "pm", min_ind = 80, max_depth = 6)
+
+```
+
+* Second, forecasting debug
+
+```{r innit}
+res <- model$forecast_ts(f_dt, "pm_t_0", 50, 30, prov_ev = NULL)
+
+```
+
+
