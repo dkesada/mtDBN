@@ -24,8 +24,7 @@ Test and debug chunks for the mtDBN model.
 * First, model fitting:
 
 ```{r innit}
-setwd("C:/Users/Quesada/Downloads/archive")
-dt <- data.table::fread("pmsm_temperature_data.csv") # 0.5 secs between rows
+dt <- data.table::fread("../dataset/pmsm_temperature_data.csv") # 0.5 secs between rows
 ```
 
 ```{r dataset_treatment}
