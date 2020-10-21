@@ -94,6 +94,8 @@ Fit the model tree and each leaf's DBN
 
 \item{\code{inc}}{the increment added to prune_val each time an invalid tree is generated}
 
+\item{\code{max_depth}}{maximum depth of the tree}
+
 \item{\code{...}}{additional parameters for the structure learning}
 }
 \if{html}{\out{</div>}}

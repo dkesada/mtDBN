@@ -11,10 +11,11 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param size the size of the networks learned
     #' @param method the structure learning method used
     #' @param obj_var the objective variable for the model tree construction
+    #' @param f_dt a previously folded dataset, in case some rows had to be deleted beforehand
     #' @param prune_val complexity parameter for the rpart prune function
     #' @param min_ind the minimum number of instances per leaf node
     #' @param inc the increment added to prune_val each time an invalid tree is generated
-    #' @param f_dt a previously folded dataset, in case some rows had to be deleted beforehand
+    #' @param max_depth maximum depth of the tree
     #' @param ... additional parameters for the structure learning
     #' @return A new 'causlist' object
     fit_model = function(dt_train, size, method, obj_var, f_dt = NULL, prune_val = 0.030, min_ind = 160, inc = 0.005, max_depth = 3, ...){
@@ -49,7 +50,7 @@ mtDBN <- R6::R6Class("mtDBN",
 
       if(!is.null(exp_dir))
         setwd(old_path)
-    },
+    }
 
   ),
 
