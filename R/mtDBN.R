@@ -18,9 +18,12 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param max_depth maximum depth of the tree
     #' @param ... additional parameters for the structure learning
     #' @return A new 'causlist' object
-    fit_model = function(dt_train, size, method, obj_var, f_dt = NULL, prune_val = 0.030, min_ind = 160, inc = 0.005, max_depth = 3, ...){
+    fit_model = function(dt_train, size, method, obj_var, f_dt = NULL, homogen = TRUE, prune_val = 0.030, min_ind = 160, inc = 0.005, max_depth = 3, ...){
       # Security checks --ICO-Merge
-
+      if(dim(dt_train)[1] < min_ind) # Turn into a new sec. check --ICO-MERGE
+        stop("The number of instances per leafe is higher than the size of the dataset. No tree can be made.")
+      
+      private$homogen <- homogen
       private$adjust_tree(dt_train, obj_var, prune_val, min_ind, inc, max_depth)
       private$fit_leaves(dt_train, size, method, f_dt, ...)
 
@@ -40,13 +43,15 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param height height of the exported image
     #' @param paper size of the image. Set to special so that width and height can be used
     #' @param horizontal the orientation of the image. Horizontal if true, vertical otherwise.
-    export_tree = function(exp_dir = NULL, width = 20, height = 20, paper = special, horizontal = FALSE){
+    export_tree = function(exp_dir = NULL, width = 20, height = 20, paper = "special", horizontal = FALSE){
       if(!is.null(exp_dir)){
         old_path <- getwd()
         setwd(exp_dir)
       }
 
-      rpart::post(private$rtree, width, height, paper, horizontal)
+      rpart::post(private$rtree, width, height, paper, horizontal, filename = "rtree.ps")
+      system("ps2pdf -dDEVICEWIDTHPOINTS=1479 -dDEVICEHEIGHTPOINTS=1598 rtree.ps rtree.pdf")
+      system("rm rtree.ps")
 
       if(!is.null(exp_dir))
         setwd(old_path)
@@ -67,6 +72,8 @@ mtDBN <- R6::R6Class("mtDBN",
     f_vars = NULL,
     #' @field size the size of the networks learned
     size = NULL,
+    #' @field homogen whether the DBN structure is the same in all leaves or not
+    homogen = NULL, 
 
     formulate = function(obj, vars){
       res <- paste0(obj, " ~ ")
@@ -129,20 +136,30 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param ... additional parameters for the structure learning. An already folded dataset can be passed
     #' @import data.table
     fit_leaves = function(dt_train, size, method, f_dt = NULL, ...){
-      network <- dbnR::learn_dbn_struc(dt_train, size, method, ...)
       if(is.null(f_dt))
         f_dt <- dbnR::fold_dt(dt_train, size)
       private$f_vars <- copy(names(f_dt))
       private$size <- size
       f_dt[, classif := treeClust::rpart.predict.leaves(private$rtree, f_dt[, .SD, .SDcols = private$vars_t_0], type = "where")] # Code local replacement
-
+      
+      if(private$homogen)
+        network <- dbnR::learn_dbn_struc(dt_train, size, method, ...)
+      else{
+        dt_class <- dbnR::time_rename(dt_train)
+        dt_class[, classif := treeClust::rpart.predict.leaves(private$rtree, dt_class, type = "where")]
+        dt_class[, idx := .I]
+      }
+      
       private$n_models <- length(unique(f_dt$classif))
       private$models <- vector(mode = "list", private$n_models)
       names(private$models) <- unique(f_dt$classif) # The names of the list will be the internal number of the leaf nodes. Kind of a dictionary style access, but O(n)
 
-      for(i in unique(f_dt$classif))
+      for(i in unique(f_dt$classif)){
+        if(!private$homogen)
+          network <- dbnR::learn_dbn_struc(dt_train[dt_class[classif == i, idx]], size, method, ...)
         private$models[[paste(i)]] <- dbnR::fit_dbn_params(network, f_dt[classif == i, .SD, .SDcols = private$f_vars])
-
+      }
+        
       f_dt[, classif := NULL]
 
     },
@@ -153,7 +170,7 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @return the DBN model that corresponds to the instance
     get_model = function(instance){
       classif <- treeClust::rpart.predict.leaves(private$rtree, instance[, .SD, .SDcols = private$vars_t_0], type = "where")
-      #print(classif)
+      print(classif)
       return(private$models[[paste(classif)]])
     },
 

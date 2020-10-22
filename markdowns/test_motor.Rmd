@@ -56,7 +56,7 @@ shift_diff_dt <- function(dt, obj_cols, id_col = NULL){
 dt[, torque := NULL]
 dt <- reduce_freq(dt, 30, 0.5)
 obj_vars <- c("stator_yoke", "stator_winding", "stator_tooth", "pm")
-dt <- shift_diff_dt(dt, obj_vars, id_col = "profile_id")
+#dt <- shift_diff_dt(dt, obj_vars, id_col = "profile_id")
 plot(ts(dt$pm))
 pred_vars <- names(dt)[!(names(dt) %in% obj_vars)]
 test_id <- c(65, 72)
@@ -78,10 +78,19 @@ dt_test[, profile_id := NULL]
 ```
 
 ```{r fit_network}
-model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 50, n_ind = 100)
-model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
-model <- mtDBN::mtDBN$new()
-model$fit_model(dt_train, size, method = "psoho", obj_var = "pm", min_ind = 80, max_depth = 6, f_dt = f_dt_train, n_it = 50, n_ind = 100)
+mode <- 2
+
+if(mode == 1){
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "dmmhc", f_dt = f_dt_train)
+  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  model <- mtDBN::mtDBN$new()
+  model$fit_model(dt_train, size, method = "dmmhc", obj_var = "pm", homogen = F, min_ind = 300, max_depth = 6, f_dt = f_dt_train, prune_val = 0.045)
+} else{
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 50, n_ind = 50)
+  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  model <- mtDBN::mtDBN$new()
+  model$fit_model(dt_train, size, method = "psoho", obj_var = "pm", homogen=T, min_ind = 300, max_depth = 6, f_dt = f_dt_train, n_it = 50, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.045)
+} #psoho
 
 ```
 
@@ -93,7 +102,7 @@ len <- 100
 
 obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
 ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
-res_net <- dbnR::forecast_ts(f_dt_test, model_fit, 3, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
 res <- model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
 
 plot(ts(f_dt_test[ini:(ini+len),pm_t_0]))
@@ -108,3 +117,4 @@ lines(res$stator_winding_t_0, col = "blue")
 plot(ts(f_dt_test[ini:(ini+len),stator_yoke_t_0]))
 lines(res$stator_yoke_t_0, col = "blue")
 ```
+
