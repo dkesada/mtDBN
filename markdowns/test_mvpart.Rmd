@@ -1,5 +1,5 @@
 ---
-title: "Full motor dataset"
+title: "mvpart test"
 author: "David Quesada"
 date: "6/10/2020"
 output:
@@ -10,13 +10,13 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
 ## Tests and debug
 
 ```{r imports}
 library(mtDBN)
 library(data.table)
 library(dbnR)
+library(mvpart)
 ```
 
 Test and debug chunks for the mtDBN model.
@@ -77,53 +77,28 @@ dt_train[, profile_id := NULL]
 dt_test[, profile_id := NULL]
 ```
 
-```{r fit_network}
-mode <- 2
-set.seed(42)
-mv <- T
-
-if(mv){
-  obj_vars <- c("stator_tooth", "stator_winding", "stator_yoke")
-}else{
-  obj_vars <- "pm"
+```{r tree_build}
+formulate <- function(obj, vars){
+  if(length(obj) > 1)
+    res <- paste0("cbind(", toString(obj), ") ~ ")
+  else
+    res <- paste0(obj, " ~ ")
+  vars <- vars[!(vars %in% obj)]
+  res <- Reduce(function(acu, x){paste0(acu, " + ", x)}, vars[-1], ini = paste0(res, vars[1]))
+  return(as.formula(res))
 }
 
-if(mode == 1){
-  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "dmmhc", f_dt = f_dt_train)
-  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
-  model <- mtDBN::mtDBN$new()
-  model$fit_model(dt_train, size, method = "dmmhc", obj_var = obj_vars, mv = mv, homogen = T, min_ind = 300, max_depth = 6, f_dt = f_dt_train, prune_val = 0.045)
-} else{
-  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 50, n_ind = 50)
-  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
-  model <- mtDBN::mtDBN$new()
-  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = F, min_ind = 300, max_depth = 6, f_dt = f_dt_train,
-                  n_it = 50, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.045)
-} 
+# model <- mtDBN::mtDBN$new()
+#   model$fit_model(dt_train, size, method = "psoho", obj_var = "pm", mv = TRUE, homogen=T, min_ind = 300, max_depth = 6, f_dt = f_dt_train, n_it = 50, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.045)
+
+m_tree <- mvpart::mvpart(form = formulate(obj_vars, names(dt_train)),
+                         data = dt_train,
+                         all.leaves = TRUE,
+                         rsq = TRUE,
+                         pca = TRUE)
+
+res <- mvpart::mvpart(formula = private$formulate(obj_var, pred_vars),
+                            data = dt_t_0, method = "anova", control = list(maxdepth = max_depth))
+res <- mvpart::prune(res, cp = prune_val)
 
 ```
-
-* Second, forecasting 
-
-```{r forecasting}
-ini <- 50
-len <- 900
-
-obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
-ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
-res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
-res <- model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
-
-plot(ts(f_dt_test[ini:(ini+len),pm_t_0]))
-lines(res$pm_t_0, col = "blue")
-
-plot(ts(f_dt_test[ini:(ini+len), stator_tooth_t_0]))
-lines(res$stator_tooth_t_0, col = "blue")
-
-plot(ts(f_dt_test[ini:(ini+len), stator_winding_t_0]))
-lines(res$stator_winding_t_0, col = "blue")
-
-plot(ts(f_dt_test[ini:(ini+len),stator_yoke_t_0]))
-lines(res$stator_yoke_t_0, col = "blue")
-```
-

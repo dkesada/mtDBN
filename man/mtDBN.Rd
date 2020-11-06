@@ -26,6 +26,8 @@ in the pso part of the algorithm.
 \item{\code{f_vars}}{names of the t_0 variables}
 
 \item{\code{size}}{the size of the networks learned}
+
+\item{\code{homogen}}{whether the DBN structure is the same in all leaves or not}
 }
 \if{html}{\out{</div>}}
 }
@@ -43,6 +45,8 @@ in the pso part of the algorithm.
 \item{\code{f_vars}}{names of the t_0 variables}
 
 \item{\code{size}}{the size of the networks learned}
+
+\item{\code{homogen}}{whether the DBN structure is the same in all leaves or not}
 }
 \if{html}{\out{</div>}}
 }
@@ -66,7 +70,9 @@ Fit the model tree and each leaf's DBN
   size,
   method,
   obj_var,
+  mv = FALSE,
   f_dt = NULL,
+  homogen = TRUE,
   prune_val = 0.03,
   min_ind = 160,
   inc = 0.005,
@@ -85,6 +91,8 @@ Fit the model tree and each leaf's DBN
 \item{\code{method}}{the structure learning method used}
 
 \item{\code{obj_var}}{the objective variable for the model tree construction}
+
+\item{\code{mv}}{if TRUE, a multivariate tree will be made. If FALSE, it will be univariate}
 
 \item{\code{f_dt}}{a previously folded dataset, in case some rows had to be deleted beforehand}
 
@@ -125,7 +133,7 @@ in linux could be used.
   exp_dir = NULL,
   width = 20,
   height = 20,
-  paper = special,
+  paper = "special",
   horizontal = FALSE
 )}\if{html}{\out{</div>}}
 }

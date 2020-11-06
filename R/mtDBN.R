@@ -11,6 +11,7 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param size the size of the networks learned
     #' @param method the structure learning method used
     #' @param obj_var the objective variable for the model tree construction
+    #' @param mv if TRUE, a multivariate tree will be made. If FALSE, it will be univariate
     #' @param f_dt a previously folded dataset, in case some rows had to be deleted beforehand
     #' @param prune_val complexity parameter for the rpart prune function
     #' @param min_ind the minimum number of instances per leaf node
@@ -18,13 +19,15 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param max_depth maximum depth of the tree
     #' @param ... additional parameters for the structure learning
     #' @return A new 'causlist' object
-    fit_model = function(dt_train, size, method, obj_var, f_dt = NULL, homogen = TRUE, prune_val = 0.030, min_ind = 160, inc = 0.005, max_depth = 3, ...){
+    fit_model = function(dt_train, size, method, obj_var, mv = FALSE, f_dt = NULL, homogen = TRUE, prune_val = 0.030, min_ind = 160, inc = 0.005, max_depth = 3, ...){
       # Security checks --ICO-Merge
       if(dim(dt_train)[1] < min_ind) # Turn into a new sec. check --ICO-MERGE
-        stop("The number of instances per leafe is higher than the size of the dataset. No tree can be made.")
-      
+        stop("The number of instances per leaf is higher than the size of the dataset. No tree can be made.")
+      if(mv && !requireNamespace("mvpart", quietly = TRUE))
+        stop("The package 'mvpart' is needed in order to build multivariate trees. You can install it via devtools::install_github('cran/mvpart')")
+
       private$homogen <- homogen
-      private$adjust_tree(dt_train, obj_var, prune_val, min_ind, inc, max_depth)
+      private$adjust_tree(dt_train, obj_var, mv, prune_val, min_ind, inc, max_depth)
       private$fit_leaves(dt_train, size, method, f_dt, ...)
 
     },
@@ -48,6 +51,8 @@ mtDBN <- R6::R6Class("mtDBN",
         old_path <- getwd()
         setwd(exp_dir)
       }
+
+      # TODO: allow filename argument, check if ps2pdf is available, check if linux
 
       rpart::post(private$rtree, width, height, paper, horizontal, filename = "rtree.ps")
       system("ps2pdf -dDEVICEWIDTHPOINTS=1479 -dDEVICEHEIGHTPOINTS=1598 rtree.ps rtree.pdf")
@@ -73,10 +78,14 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @field size the size of the networks learned
     size = NULL,
     #' @field homogen whether the DBN structure is the same in all leaves or not
-    homogen = NULL, 
+    homogen = NULL,
 
     formulate = function(obj, vars){
-      res <- paste0(obj, " ~ ")
+      if(length(obj) > 1)
+        res <- paste0("cbind(", toString(obj), ") ~ ")
+      else
+        res <- paste0(obj, " ~ ")
+      vars <- vars[!(vars %in% obj)]
       res <- Reduce(function(acu, x){paste0(acu, " + ", x)}, vars[-1], ini = paste0(res, vars[1]))
       return(as.formula(res))
     },
@@ -99,14 +108,38 @@ mtDBN <- R6::R6Class("mtDBN",
     },
 
     #' @description
+    #' Builds and prunes an univariate or multivariate tree.
+    #' @param mv if TRUE, a multivariate tree will be made. If FALSE, it will be univariate
+    #' @param formula the formula fo the regression tree
+    #' @param data the training dataset
+    #' @param method the tree building method
+    #' @param max_depth maximum depth of the tree
+    #' @param prune_val complexity parameter for the rpart prune function
+    build_tree = function(mv, formula, data, max_depth, prune_val){
+      res <- NULL
+      if(mv){
+        res <- mvpart::mvpart(form = formula, data = data, method = "anova", control = list(maxdepth = max_depth))
+        res <- mvpart::prune(res, cp = prune_val)
+      }
+      else{
+        res <- rpart::rpart(formula = formula, data = data, method = "anova", control = list(maxdepth = max_depth))
+        res <- rpart::prune(res, cp = prune_val)
+      }
+
+      return(res)
+    },
+
+    #' @description
     #' Fits an rpart regression tree to the training dataset. It is then pruned
     #' and has to have a minimum number of instances per leaf node.
     #' @param dt_train the training dataset
     #' @param obj_var the response variable for the splits in the regression tree
+    #' @param mv if TRUE, a multivariate tree will be made. If FALSE, it will be univariate
     #' @param prune_val complexity parameter for the rpart prune function
     #' @param min_ind the minimum number of instances per leaf node
     #' @param inc the increment added to prune_val each time an invalid tree is generated
-    adjust_tree = function(dt_train, obj_var, prune_val, min_ind, inc, max_depth){
+    #' @param max_depth maximum depth of the tree
+    adjust_tree = function(dt_train, obj_var, mv, prune_val, min_ind, inc, max_depth){
       dt_t_0 <- dbnR::time_rename(dt_train)
       private$vars_t_0 <- copy(names(dt_t_0))
       pred_vars <- names(dt_t_0)
@@ -115,9 +148,8 @@ mtDBN <- R6::R6Class("mtDBN",
 
       valid <- F
       while (!valid) {
-        res <- rpart::rpart(formula = private$formulate(obj_var, pred_vars),
-                       data = dt_t_0, method = "anova", control = list(maxdepth = max_depth))
-        res <- rpart::prune(res, cp = prune_val)
+        res <- private$build_tree(mv, formula = private$formulate(obj_var, pred_vars),
+                                  data = dt_t_0, max_depth = max_depth, prune_val = prune_val)
 
         valid <- min_ind <= min(private$sum_unique(res, dt_t_0))
         prune_val <- prune_val + inc
@@ -141,7 +173,7 @@ mtDBN <- R6::R6Class("mtDBN",
       private$f_vars <- copy(names(f_dt))
       private$size <- size
       f_dt[, classif := treeClust::rpart.predict.leaves(private$rtree, f_dt[, .SD, .SDcols = private$vars_t_0], type = "where")] # Code local replacement
-      
+
       if(private$homogen)
         network <- dbnR::learn_dbn_struc(dt_train, size, method, ...)
       else{
@@ -149,7 +181,7 @@ mtDBN <- R6::R6Class("mtDBN",
         dt_class[, classif := treeClust::rpart.predict.leaves(private$rtree, dt_class, type = "where")]
         dt_class[, idx := .I]
       }
-      
+
       private$n_models <- length(unique(f_dt$classif))
       private$models <- vector(mode = "list", private$n_models)
       names(private$models) <- unique(f_dt$classif) # The names of the list will be the internal number of the leaf nodes. Kind of a dictionary style access, but O(n)
@@ -159,7 +191,7 @@ mtDBN <- R6::R6Class("mtDBN",
           network <- dbnR::learn_dbn_struc(dt_train[dt_class[classif == i, idx]], size, method, ...)
         private$models[[paste(i)]] <- dbnR::fit_dbn_params(network, f_dt[classif == i, .SD, .SDcols = private$f_vars])
       }
-        
+
       f_dt[, classif := NULL]
 
     },
