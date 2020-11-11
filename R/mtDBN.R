@@ -214,6 +214,43 @@ mtDBN <- R6::R6Class("mtDBN",
       
       return(res)
     },
+    
+    # --ICO-Merge duplicated function from dbnR
+    mae = function(orig, pred){
+      return(sum(abs(orig - pred))/length(orig))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    mae_by_col = function(dt, col){
+      return(private$mae(unlist(dt[,.SD, .SDcols = names(col)]), col))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    print_metrics = function(metrics, obj_vars){
+      print("The average MAE per execution is:", quote = FALSE)
+      sapply(obj_vars, function(x){print(paste0(x, ": ", round(metrics[x], 4)),
+                                         quote = FALSE)})
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    eval_metrics = function(dt_orig, preds, ini, len){
+      metrics <- lapply(names(preds), function(x){
+        preds[, private$mae_by_col(dt_orig[ini:(ini+len-1)],.SD), .SDcols = x]})
+      metrics <- unlist(metrics)
+      names(metrics) <- names(preds)
+      private$print_metrics(metrics, names(preds))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    plot_single_result = function(dt, results, var){
+      plot(ts(dt[, .SD, .SDcols = var]))
+      invisible(lines(results[, .SD, .SDcols = var], col = "blue"))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    plot_results = function(dt, results, obj_vars){
+      invisible(sapply(obj_vars, function(x){private$plot_single_result(dt, results, x)}))
+    },
 
     #' @description
     #' Classify a data.table with one row and select the appropriate model
@@ -225,7 +262,8 @@ mtDBN <- R6::R6Class("mtDBN",
       return(private$models[[paste(classif)]])
     },
     
-    forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev){
+    forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev, print_res = TRUE, plot_res = TRUE){
+      exec_time <- Sys.time()
       res <- matrix(nrow = len, ncol = length(obj_vars), data = 0.0)
       colnames(res) <- obj_vars
       res <- data.table(res)
@@ -260,7 +298,17 @@ mtDBN <- R6::R6Class("mtDBN",
 
         res[i, (obj_vars) := preds$mu_p[obj_vars]]
       }
-
+      
+      exec_time <- exec_time - Sys.time()
+      
+      if(print_res){
+        print(exec_time)
+        private$eval_metrics(f_dt, res, ini, len)
+      }
+      
+      if(plot_res)
+        private$plot_results(f_dt[ini:(ini+len-1)], res, obj_vars)
+      
       return(res)
     }
   ))

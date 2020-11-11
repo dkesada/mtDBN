@@ -78,7 +78,7 @@ dt_test[, profile_id := NULL]
 ```
 
 ```{r fit_network}
-mode <- 1
+mode <- 2
 set.seed(42)
 mv <- F
 homogen <- T
@@ -86,7 +86,7 @@ homogen <- T
 if(mv){
   obj_vars <- c("pm","stator_tooth", "stator_winding", "stator_yoke")
 }else{
-  obj_vars <- "pm"
+  obj_vars <- "stator_tooth"
 }
 
 if(mode == 1){
@@ -119,8 +119,8 @@ if(mode == 1){
 * Second, forecasting 
 
 ```{r forecasting}
-ini <- 50
-len <- 840
+ini <- 101
+len <- 200
 
 obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
 ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
@@ -130,20 +130,7 @@ res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_v
 print("----------------------")
 
 print("Forecasting time for mtDBN")
-tmp <- Sys.time()
 res <- model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
-tmp - Sys.time()
 
-plot(ts(f_dt_test[ini:(ini+len),pm_t_0]))
-lines(res$pm_t_0, col = "blue")
-
-plot(ts(f_dt_test[ini:(ini+len), stator_tooth_t_0]))
-lines(res$stator_tooth_t_0, col = "blue")
-
-plot(ts(f_dt_test[ini:(ini+len), stator_winding_t_0]))
-lines(res$stator_winding_t_0, col = "blue")
-
-plot(ts(f_dt_test[ini:(ini+len),stator_yoke_t_0]))
-lines(res$stator_yoke_t_0, col = "blue")
 ```
 
