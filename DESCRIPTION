@@ -14,7 +14,8 @@ Imports: dbnR (>= 0.4.5),
   R6 (>= 2.4.1),
   rpart (>= 4.1-15),
   mvpart (>= 1.6-2),
-  treeClust (>= 1.1-7)
+  treeClust (>= 1.1-7),
+  bnlearn (>= 4.5)
 Encoding: UTF-8
 RoxygenNote: 7.1.1
 Suggests: 
