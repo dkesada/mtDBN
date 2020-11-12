@@ -32,9 +32,9 @@ mtDBN <- R6::R6Class("mtDBN",
 
     },
 
-    forecast_ts = function(f_dt, obj_vars, ini, len, prov_ev){
+    forecast_ts = function(f_dt, obj_vars, ini, len, prov_ev, plot_res){
       # Security checks --ICO-Merge
-      preds_test <- private$forecast_val_data_tree(f_dt, obj_vars, ini, len, prov_ev)
+      preds_test <- private$forecast_val_data_tree(f_dt, obj_vars, ini, len, prov_ev, plot_res)
     },
 
     #' @description

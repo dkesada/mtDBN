@@ -72,6 +72,7 @@ del_vars <- names(f_dt_train)[grepl(id_var, names(f_dt_train))]
 f_dt_train[, (del_vars) := NULL]
 f_dt_test <- dbnR::fold_dt(dt_test, size)
 f_dt_test <- filter_same_cycle(f_dt_test, size, id_var)
+f_dt_test_id <- f_dt_test[, .SD, .SDcols = del_vars]
 f_dt_test[, (del_vars) := NULL]
 dt_train[, profile_id := NULL]
 dt_test[, profile_id := NULL]
@@ -81,12 +82,12 @@ dt_test[, profile_id := NULL]
 mode <- 2
 set.seed(42)
 mv <- F
-homogen <- T
+homogen <- F
 
 if(mv){
   obj_vars <- c("pm","stator_tooth", "stator_winding", "stator_yoke")
 }else{
-  obj_vars <- "stator_tooth"
+  obj_vars <- "pm"
 }
 
 if(mode == 1){
@@ -118,9 +119,57 @@ if(mode == 1){
 
 * Second, forecasting 
 
-```{r forecasting}
-ini <- 101
-len <- 200
+```{r forecasting_all}
+obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
+ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
+
+res_uni <- NULL
+res_mtdbn <- NULL
+
+sink("fore_results.txt")
+
+for(i in f_dt_test_id[, unique(profile_id_t_0)]){
+  it <- dim(f_dt_test_id[profile_id_t_0 == i])[1] %/% 100
+  rest <- dim(f_dt_test_id[profile_id_t_0 == i])[1] %% 100
+  for(j in 1:it){
+    print("Forecasting time for single net: ")
+    res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = 100*(j-1)+1, len = 100, prov_ev = ev_vars, plot_res = F)
+    print("Forecasting time for mtDBN")
+    res <- model$forecast_ts(f_dt_test, obj_vars, ini = 100*(j-1)+1, len = 100, prov_ev = ev_vars, plot_res = F)
+  }
+  print("Forecasting time for single net: ")
+  res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = 100*it+1, len = rest, prov_ev = ev_vars, plot_res = F)
+  print("Forecasting time for mtDBN")
+  res <- model$forecast_ts(f_dt_test, obj_vars, ini = 100*it+1, len = rest, prov_ev = ev_vars, plot_res = F)
+}
+
+sink()
+
+file_name <- "./fore_results.txt"
+res <- readChar(file_name, file.info(file_name)$size)
+
+digits <- regmatches(res, gregexpr("[[:digit:]]+.[[:digit:]]+", res)) # All decimal numbers
+digits <- digits[[1]][-seq(1, length(digits[[1]]), by = 5)] # Disregard the execution times
+
+res <- matrix(data = 0.0, nrow = 2, ncol = length(obj_vars), dimnames = list(c("simple", "mtdbn"), obj_vars))
+i_idx <- 0
+j_idx <- 0
+
+for(d in digits){
+  res[i_idx + 1, j_idx + 1] <- res[i_idx + 1, j_idx + 1] + as.numeric(d)
+  j_idx <- (j_idx + 1) %% length(obj_vars)
+  if(j_idx == length(obj_vars)-1)
+    i_idx <- (i_idx + 1) %% 2
+}
+
+res <- res / (length(digits) / (2*length(obj_vars)))
+print(res)
+
+```
+
+```{r forecasting, eval=FALSE}
+ini <- 301
+len <- 400
 
 obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
 ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
