@@ -82,7 +82,7 @@ dt_test[, profile_id := NULL]
 mode <- 2
 set.seed(42)
 mv <- F
-homogen <- F
+homogen <- T
 
 if(mv){
   obj_vars <- c("pm","stator_tooth", "stator_winding", "stator_yoke")
