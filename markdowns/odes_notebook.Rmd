@@ -1,0 +1,319 @@
+---
+title: "ODE heat transfer"
+author: "David Quesada, Pedro Fontan"
+date: "3/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Modelling heat transference in tubes with a system of ODEs 
+
+### Introduction
+
+The main idea of this experiment is to model a simplified system where we have a fluid circulating through a tube and a heat source heating said tube. This fluid precipitates materials that create an insulating layer inside the tube over time (fouling). We will model the temperature of the fluid $T_1$, the temperature of the tube walls $T_2$, the temperature of the environment $T_3$, the concentration of molecules prone to fouling present in the fluid $C_a$ and the thickness of the insulating layer $S_c$. The objective is to generate a synthetic multivariate time-series dataset of this kind of system in order to test the effectiveness of other modelling tools or optimization algorithms when approaching problems similar to this one. 
+
+The experiment will go incrementally from simpler settings to more complex ones. Initially, only one point of the tube will be taken into account, and afterwards we will include more points of the tube, their interactions and a simplification of the effect of the flow inside the tube. 
+
+We will use the package _deSolve_ to evaluate the system of ODEs.
+
+```{r init}
+library(deSolve)
+```
+
+### Modelling just the increase of the insulating layer with constant $C_a$ 
+
+Our first component in the system will be the growth of the insulating layer over time. As a first approach to the _deSolve_ package and the problem, we can try modeling it. This growth can be expressed as:
+$$\frac{\partial S_c}{\partial t}  = A_2 k_1 C_A$$
+where $S_c$ is the thickness of the insulating layer, $t$ is the time, $A_2$ is a constant that adjusts the process, $k_1$ is the reaction speed, i.e., the speed at which the molecules prone to fouling precipitate from the fluid, and $C_a$ is the concentration of molecules prone to fouling in the fluid. In this case, both $k_1$ and $C_a$ are constant.
+
+```{r sc_only}
+ins_increase <- function(time, y, params){
+  with(as.list(c(y, params)), {
+    dS_c <- A_2 * k_1 * C_a
+    list(dS_c)
+  })
+}
+
+y <- c(S_c = 0.001) # Initial values
+params <- list(A_2 = 0.01, k_1 = 0.1, C_a = 100) # Parameters
+times <- seq(0, 99)
+
+res <- deSolve::ode(y, times, ins_increase, params)
+
+plot(res)
+```
+
+The parameters will be tuned later on, for now they are fixed to random values. In this case, the increase of the insulating layer is linear with respect to the time.
+
+### Modelling $S_c$ and $C_A$ 
+
+The next component in the system is $C_A$. Its growth can be expressed as:
+$$\frac{\partial C_A}{\partial t} = -A_4 k_2 C_A$$
+$$k_1 = A_3 e^{\frac{-A_5}{R T_1}}$$
+$$k_2 = A'_3 e^{\frac{-A'_5}{R T_1}}$$
+where $A_3$ and $A'_3$ are constant pre-exponential factors, $A_5$ and $A'_5$ are constant activation energies, $A_4$ is a regulatory constant and $R$ is the ideal gas constant. In this case, $T_1$ will remain constant.
+
+```{r sc_ca_only}
+coupled_Sc_Ca <- function(time, y, params){
+  with(as.list(c(y, params)), {
+    k_1 <- A_3 * exp(-A_5 / (R * T_1))
+    k_2 <- A_3_p * exp(-A_5_p / (R * T_1))
+    dS_c <- A_2 * k_1 * y[2]
+    dC_A <- -A_4 * k_2 * y[2]
+    list(c(dS_c, dC_A))
+  })
+}
+
+y <- c(S_c = 0.001, C_A = 50)
+params <- list(A_2 = 0.01, A_3 = 1.52e2, A_3_p = 1.52e2, A_4 = 0.08, A_5 = 10.8e3, A_5_p = 10.8e3, T_1 = 200, R = 8.314463)
+times <- seq(0, 99)
+
+res <- deSolve::ode(y = y, times = times, func = coupled_Sc_Ca, parms = params)
+
+plot(res)
+```
+
+As time passes, the concentration of molecules prone to fouling diminishes and the thickness of the layer increases. At this point, their increase and decrease is exponential, but when $T_1$ stops being a constant and is affected by the thickness of the layer, the decrease in $C_A$ will also be affected.
+
+### Modelling $S_c$, $C_a$ and $T_1$
+
+In the next extension, we'll add the temperature of the fluid as a variable and the temperature of the tube walls as a constant. The expression that defines the variation over time of $T_1$ is:
+$$\rho_1 C_{p1}(\frac{\partial T_1}{\partial t} + v \nabla T_1) = k_1 \nabla^2 T_1 + f_1(T_1, T_2)$$
+$$f_1(T_1, T_2) = \frac{A_1}{S_c} (T_2 - T_1)$$
+In this case, $\rho_1$ is the density of the fluid, $C_{p1}$ is the thermal capacity of the fluid, $v \nabla T_1$ is the convective gradient, $k_1$ is the thermal conductivity of the fluid and $A_1$ is a constant. The convective gradient and the thermal conductivity can be both reduced to 0 if we are modeling only one point of the tube.
+
+```{r sc_ca_t1}
+coupled_Sc_Ca_t1 <- function(time, y, params){
+  with(as.list(c(y, params)), {
+    f_1 <-  (A_1 / y[1]) * (T_2 - y[3])
+    dT_1 <- f_1 / (rho_1 * C_p1)
+    k_1 <- A_3 * exp(-A_5 / (R * y[3]))
+    k_2 <- A_3_p * exp(-A_5_p / (R * y[3]))
+    dS_c <- A_2 * k_1 * y[2]
+    dC_a <- -A_4 * k_2 * y[2]
+    list(c(dS_c, dC_a, dT_1))
+  })
+}
+
+y <- c(S_c = 0.001, C_a = 50, T_1 = 200)
+# Fluid rho and C_p equal to those of oil in kg/m3 and W/(m K) respectively
+params <- list(A_2 = 0.01, A_3 = 1.52e2, A_3_p = 1.52e2, A_4 = 0.08, A_5 = 10.8e3, A_5_p = 10.8e3, T_2 = 400, R = 8.314463, A_1 = 0.3, rho_1 = 847, C_p1 = 0.12)
+times <- seq(0, 99)
+
+res <- deSolve::ode(y = y, times = times, func = coupled_Sc_Ca_t1, parms = params)
+
+plot(res)
+```
+
+Although the parameters are given kind of at random, the behaviour of the system is quite promising. As the insulating layer thickens, the temperature gain over time decreases. The resulting function of $T_1$ looks like a logarithmic one, which was the intended shape. Prior to adjusting the parameters, we will introduce the rest of the temperatures.
+
+### Modelling all the variables
+
+In this last case we will introduce $T_2$ and $T_3$. This will be the last two variables in this preliminary model.
+$$\rho_2 C_{p2}(\frac{\partial T_2}{\partial t}) = k_2 \nabla^2 T_2 + f_2(T_1, T_2, T_3)$$
+$$f_2(T_1, T_2, T_3) = \frac{A_1}{S_c} (T_1 - T_2) + \epsilon_2 (T_3^4 - T_2^4)$$
+$$T_3 = (1-\alpha) * T_{min} + \alpha * T_{max}; \alpha \le 1$$
+$$T_3 = (2-\alpha) * T_{max} + (\alpha-1) * T_{min}; \alpha \le 2$$
+$$\alpha = f(m_c)$$
+where $\epsilon_2$ is a constant and $m_c$ is the fuel flow of oven heaters. To properly model $T_3$, we need to define $\alpha$ as a function of $m_c$ in the range $[0,2]$. For now, this function is not yet defined, so T_3 will remain a constant until then.
+
+```{r sc_ca_t1_t2}
+coupled_Sc_Ca_t1_t2 <- function(time, y, params){
+  with(as.list(c(y, params)), {
+    f_2 <-  (A_1 / y[1]) * (y[3] - y[4]) + eps_2 * (T_3^4 - y[4]^4)
+    dT_2 <- f_2 / (rho_2 * C_p2)
+    f_1 <-  (A_1 / y[1]) * (y[4] - y[3])
+    dT_1 <- f_1 / (rho_1 * C_p1)
+    k_1 <- A_3 * exp(-A_5 / (R * y[3]))
+    k_2 <- A_3_p * exp(-A_5_p / (R * y[3]))
+    dS_c <- A_2 * k_1 * y[2]
+    dC_a <- -A_4 * k_2 * y[2]
+    list(c(dS_c, dC_a, dT_1, dT_2))
+  })
+}
+
+y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
+# Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
+# Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
+params <- list(A_2 = 0.01,  A_3 = 1.52e1, A_3_p = 1.52e1, A_4 = 0.08, 
+               A_5 = 10.8e3, A_5_p = 10.8e3, T_3 = 900, R = 8.314463, A_1 = 0.3,
+               rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 1e-05)
+times <- seq(0, 99)
+
+res <- deSolve::ode(y = y, times = times, func = coupled_Sc_Ca_t1_t2, parms = params)
+
+plot(res)
+```
+
+### Modelling T3 as a sigmoid
+
+Instead of a piece-wise lineal function for the interaction between the fuel provided to the burners and the change in gas temperature inside the oven, we will model this with a sigmoid function over the maximum and minimum temperatures that the oven supports:
+$$T_3 = T_{min} + sigmoid(m_c)*(T_{max} - T_{min})$$
+$$sigmoid(t) = \frac{1}{1 + e^{-t}}$$
+The $k$ parameter should be different between $S_c$ and $C_a$.
+
+The flow has to be included as a way to dissipate temperature from the system.
+
+Also, a new function is created to allow for the introduction of interventions on the parameters. Given that one parameter is $m_c$, which models the amount of fuel provided to the oven, this means that $m_c$ is a variable that can be directly intervened by the operator of a furnace. The flow of fluid provided to the system should also be this kind of parameter. This also means that a simulation should allow for these parameters to change at any given time, independently of the state of the system. The new ode solver function created allows this kind of scenarios. A noise component is added to model the uncertainty that we would have if we were modelling a real physical problem. For the purpose of this experiments, it will remain noiseless to be able to adjust the scales of the constants.
+
+```{r auxiliary_functions}
+sigmoid <- function(t){
+  1 / (1 + exp(1)^-t)
+}
+
+initial_params_check <- function(params, times){
+  invisible(lapply(params, function(x){
+    if(length(x) != 1 && length(x) != length(times))
+      stop("The length of the parameters has to be either 1 or the length of 'times'")
+  }))
+}
+
+get_params <- function(params_m, i){
+  if(nrow(params_m) == 1)
+    res <- params_m[1,]
+  else
+    res <- params_m[i,]
+  
+  return(as.list(res))
+}
+
+# This function allows for a list with vectors of parameters, so that
+# interventions or varying parameters over time can be used
+#
+# y = initial values of the modelled variables
+# times = sequence of the instants to be modelled
+# foo = the function that defines the equations of the model
+# params = list with the values of the parameters, one value if constant all 
+#          the time, a vector of equal length to times ioc
+# mu_1 = mean of the Gaussian noise added to T_1. Both mean and sd set to 0 equal no noise.
+# mu_2 = mean of the Gaussian noise added to T_2
+# sig_1 = standard deviation of the Gaussian noise added to T_1
+# sig_2 = standard deviation of the Gaussian noise added to T_2
+# returns a matrix with the value of each variable in each instant of time
+ode_var_params <- function(y, times, foo, params, mu_1 = 0, mu_2 = 0, sigma_1 = 0, sigma_2 = 0){
+  # Security checks
+  initial_params_check(params, times)
+  
+  res <- matrix(nrow = length(times), ncol = 1 + length(y), data = 0.0)
+  colnames(res) <- c("time", names(y))
+  params_m <- do.call(cbind, params)
+  times_it <- c(1,2)
+  y_it <- y
+  for(i in 1:length(times)){
+    res_it <- deSolve::ode(y = y_it, times = times_it, func = foo, parms = get_params(params_m, i))
+    res_it[,4] <- res_it[,4] + rnorm(1, mu_1, sigma_1) # White noise for T_1
+    res_it[,5] <- res_it[,5] + rnorm(1, mu_2, sigma_2) # White noise for T_2
+    res[i,] <- res_it[2,]
+    y_it <- as.vector(res_it[2,-1])
+    names(y_it) <- colnames(res_it[-1])
+  }
+  res[,1] <- times
+  class(res) <- c("deSolve", "matrix")
+  
+  return(res)
+}
+```
+
+```{r sc_ca_t1_t2_t3}
+coupled_Sc_Ca_t1_t2_t3 <- function(time, y, params){
+  with(as.list(c(y, params)), {
+    T_3 <- t_min + sigmoid(m_c) * (t_max - t_min)
+    f_2 <-  (A_1 / y[1]) * (y[3] - y[4]) + eps_2 * (T_3^4 - y[4]^4)
+    dT_2 <- f_2 / (rho_2 * C_p2)
+    f_1 <-  (A_1 / y[1]) * (y[4] - y[3])
+    dT_1 <- f_1 / (rho_1 * C_p1)
+    k_1 <- A_3 * exp(-A_5 / (R * y[3]))
+    k_2 <- A_3_p * exp(-A_5_p / (R * y[3]))
+    dS_c <- A_2 * k_1 * y[2]
+    dC_a <- -A_4 * k_2 * y[2]
+    list(c(dS_c, dC_a, dT_1, dT_2))
+  })
+}
+
+y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
+# Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
+# Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
+# Example scenario: the operator gives close to full fuel to the burners at the begining and 
+# afterwards he slowly decreases m_c
+params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
+               rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 1e-05,
+               m_c = c(rep(3, 10), rep(2, 30), rep(1.5, 30), rep(1, 30)), t_min = 800, t_max = 1300)
+times <- seq(0, 99)
+
+res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3, params = params)
+
+plot(res)
+```
+
+### Adding the flow component
+
+The flow component in the systems adds the effect of cold fluid entering the system each instant through the area of the tube. It is written as a product of the flow rate and the difference of the fluids temperature on entrance, $T_{in}$, and the fluids current temperature, $T_1$. The cold fluid entering the system translates into a loss of temperature in the fluid from the last instant. This component is important because it adds a mechanism to reduce the temperature in the system. Without it, the model only increases its temperature permanently up to the limit of T3. Now, with both $S_c$ and the new flow, there can be situations where the heat transfer between T2 and T1 is so low, that the fluid looses temperature due to the effect of the colder flow. It also adds either the volume or the pressure inside the tube as variables that can be manipulated by the agent as interventions in the system:
+
+$$\rho_1 C_{p1}(\frac{\partial T_1}{\partial t} - A_6 Q_{in}\Delta T) =  f_1(T_1, T_2)$$
+$$Q_{in}^1 = vol \frac{ \pi (2r)^2}{4}$$
+$$Q_{in}^2 = \frac{\pi \Delta p r^4}{8\mu_1 l}$$
+
+The first term adjusts the $T_1$ equation so that it takes into account the term with the temperature difference $\Delta T = T_{in} - T_1$. The two approaches that can be followed in regards to $Q_1$ depend on whether the volume inside the tube is used, $Q_{in}^1$, or whether the pressure in the tube and the viscosity of the fluid is used, $Q_{in}^2$. In both of them, $Q_{in}$ is the flow rate in $m^3/h$, $vol$ is the volume of fluid inside the tubes in $m^3$, $r$ is the radius of the tube's section in meters, $\Delta p$ is the pressure difference between both ends of the pipe and $\mu_1$ is the viscosity of the fluid. Both possibilities are viable, and the approach with the pressure also adds the complexity of the fluid's viscosity, but the units in the $Q_{in}^2$ equation are not very solid. For now, we will use the volume as the variable that can be manipulated in order to affect the flow.
+
+```{r sc_ca_t1_t2_t3_vol}
+coupled_Sc_Ca_t1_t2_t3_vol <- function(time, y, params){
+  with(as.list(c(y, params)), {
+    T_3 <- t_min + sigmoid(m_c) * (t_max - t_min)
+    f_2 <-  (A_1 / y[1]) * (y[3] - y[4]) + eps_2 * (T_3^4 - y[4]^4)
+    dT_2 <- f_2 / (rho_2 * C_p2)
+    #Q_in <- (pi * delta_p * r^4) / (8 * mu_1 * l)
+    Q_in <- (pi * vol * (2*r)^2) / (4)
+    delta_T1 <- A_6 * Q_in * (Tin - y[3]) 
+    f_1 <-  (A_1 / y[1]) * (y[4] - y[3])
+    dT_1 <- (f_1) / (rho_1 * C_p1) + delta_T1
+    k_1 <- A_3 * exp(-A_5 / (R * y[3]))
+    k_2 <- A_3_p * exp(-A_5_p / (R * y[3]))
+    dS_c <- A_2 * k_1 * y[2]
+    dC_a <- -A_4 * k_2 * y[2]
+    list(c(dS_c, dC_a, dT_1, dT_2))
+  })
+}
+
+y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
+# Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
+# Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
+# Example scenario: the operator gives low fuel to the burners at the beginning and 
+# afterwards he slowly increases m_c as the temperature T1 decreases due to S_c
+params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
+               rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
+               m_c = 0.5, t_min = 800, t_max = 1300, vol = 20,
+               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80)
+times <- seq(0, 99)
+
+res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
+
+plot(res)
+```
+
+The variables that can be manipulated and their range is:
+
+* $S_c$: the initial value of the insulating layer. Originally set to 1e-3 as a close to non-existant. Can go up to 6 and have quite a negative effect on the temperature transference from $T_2$ to $T_1$. can be set to a higher initial value to simulate a sub-optimal cleaning between cycles.
+
+* $C_a$: the initial value of the quantity of particles prone to generating the insulating layer. Originally set to 50 ad progressively declines until it reaches 0. A higher initial value can represent a fluid more prone to deposit components and with a higher abundance of them, which will keep on generating a thicker insulating layer for longer.
+
+* $\rho_1$ and $C_{p1}$: the density and thermal capacity of the fluid being processed, so varying those values in a simmilar range will represent changing the composition of the fluid being heated
+
+* $m_c$: the amount of fuel provided to the oven heaters. It can go from $-\infty$ to $+\infty$, but visible changes go from -5 to +5, more or less. It is dependant on the maximum and minimum temperatures that the oven supports.
+
+* $vol$: the volume of fluid in the oven. It should range from 10 $m^3$ to 30 $m^3$, give or take. Lower values can be given, but then very little temperature will be removed from the system. The opposite situation is also possible: you can increase it over 30, but you will need an increasingly higher $T_2$ to not lose temperature, up to a point where no matter what $m_c$ you set it will not increase.
+
+
+### Final remarks
+
+Now that all the desired components are in place, the first version of the simulator is finished. It represents a very (very) simplified version of the real problem, where the spatial component is reduced to a single spot, the contact surfaces are all uniform, no turbulences are taken into acount, and so on and so forth. Nonetheless, this simulator is intended to have two main objectives:
+
+* To generate multivariate time-series datasets where one can try to model the original process that generated that data with a time-series model. ALthough the system is very simple, the relationships among the variables in the system are not linear. Given the lack of public multivariate time-series models, this simulator can help testing over synthetic data.
+
+* To solve a problem of optimization. The main idea is that $T_1$ should be at some fixed temperature (for example 250ºC) for the longest possible time and $T_2$ cannot surpass a certain limit temperature (for example 1100ºC). This means that you can either maintain $T_2$ low but you get $T_1$ in suboptimal temperatures for a longer time or you can crank up $T_2$ so that you maintain $T_1$ at the best temperature but reach the limit faster, or some mixture of both increasing and decreasing $T_2$. At some point, $S_c$ will have such a severe effect that most likely you wont be able to get $T_1$ high enough and you should stop to reset the value of $S_c$ and $C_a$. The manipulable variables are $m_c$ and the volume, or you could only let the optimization algorithm change $m_c$.
+
+The values of the constants can be changed, but this kind of systems are very sensible. If you want another operating ranges (for example, $T_1$ to move around the 350-400ºC range), you will have to adjust a lot of this constants to get to the desired point, and changing one constant could make the whole system misbehave and make the temperatures either plummet or sky-rocket out of the charts.

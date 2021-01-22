@@ -1,0 +1,167 @@
+---
+title: "Generating a synthetic dataset with ODE simulations"
+author: "David Quesada"
+date: "18/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Generating a synthetic dataset with ODE simulations
+
+To test the performance of mtDBN models versus regular DBN models, we are going to generate a synthetic dataset from our simulator of a process of heat transfer from a heat source to a fluid inside a tube. The details of this process and the simulator can be found in the 'odes_notebook.Rmd' markdown, so we will not expand on them here. It suffices to say that this is an inherently non-linear physical process, where the effect that the variables have on each other varies depending on their value, for example, the same heat will not be transferred from a tube at 100ºC to a fluid at 50ºC and from a tube at 400ºC to a fluid at 200ºC. This means that an inherently linear model like DBNs should have problems representing this kind of process and forecasting, problems that we intend to alleviate with the mtDBN model.
+
+## Generate dataset by simulation
+
+This markdown document will follow the generation of several independent cycles where the initial parameters vary. The process behind the cycles and the constants that define the equations will remain the same so that the models can fit them. Each cycle will have 100 time instants, where the value of the next instant only depends on the value from the previous one, i.e., the recursive order of the time-series will be 1. The initial points of the cycles will be different each time, and to avoid a deterministic behaviour of the simulator, some white noise will be added to the results of the simulation. All sessions will be seeded so that the results are reproducible in the future.
+
+### Cicle generation
+
+As a first approach, we will try modelling a cycle for some fixed initial values. This cycle is very standard, with a near 0 starting $S_c$, an amount of $C_a$ that gets almost consumed, low starting temperatures, low $m_c$ throughout and average fluid properties. We will add some noise to the resulting temperatures each step in the form of $T_1 + \mathcal{N}(0,0.2)$ and $T_2 + \mathcal{N}(0,5)$
+
+```{r init}
+library(deSolve)
+library(data.table)
+
+source("../R/utils.R")
+```
+
+```{r test cycle}
+set.seed(42)
+y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
+# Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
+# Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
+params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
+               rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
+               m_c = 0.5, t_min = 800, t_max = 1300, vol = 20,
+               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80)
+times <- seq(0, 99)
+
+res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
+
+plot(res)
+```
+
+The aspect of the cycle is similar to what the average cycle is expected to look like. The noise will model the uncertainty that a real system would have. Increasing $m_c$ would increase $T_2$ and in turn allow for a higher value of $S_c$ without loosing temperature in $T_1$. The 'objective' of a simulation should be to maintain the value of $T_1$ at a certain value without surpassing a limit temperature in $T_2$, which would become impossible at some point due to the insulating factor of $S_c$ and the system should be stopped. That is the original optimization problem behind the simulation, but we will focus on modelling the process itself rather than optimizing the usage of $m_c$. 
+
+First, we will time what appending method to use. Four possible methods could be: using 'rbind' to append the matrices resulting of each cycle, using 'rbindlist' and converting the results to a 'data.table', using 'rbind' with the original matrix being in an environment and using 'rbind' with an R6 class.  
+
+```{r timing appends}
+a <- Sys.time()
+
+res2 <- res
+for(i in 1:1000)
+  res2 <- rbind(res2, res)
+
+print("Elapsed time for cbinding matrix:")
+print(Sys.time() - a)
+
+
+a <- Sys.time()
+
+tmp2 <- as.data.table(res)
+for(i in 1:1000)
+  tmp2 <- rbindlist(list(tmp2, as.data.table(res)))
+
+print("Elapsed time for rbindlist data.table:")
+print(Sys.time() - a)
+
+a <- Sys.time()
+
+tmp <- new.env(parent = emptyenv())
+tmp$dt <- res
+combine <- function(e, dt_in){
+  e$dt <- rbind(e$dt, dt_in)}
+for(i in 1:1000)
+  combine(tmp, res)
+
+print("Elapsed time for environments:")
+print(Sys.time() - a)
+
+a <- Sys.time()
+
+tmp <- R6::R6Class("tmp", public = list(
+  initialize = function(dt){private$dt <- dt},
+  combine = function(dt_in){private$dt <- rbind(private$dt, dt_in)}),
+  private = list(dt = NULL))
+
+tmp1 <- tmp$new(res)
+for(i in 1:1000)
+  tmp1$combine(res)
+
+print("Elapsed time for R6:")
+print(Sys.time() - a)
+
+```
+Some quick tests to create a 1000 cycle dataset seem to have a similar cost, a bit faster for the simple matrix approach. Increasing the order to 10000 cycles makes the cost in time to sky-rocket, and the matrix approach remains as the best option.
+
+### Multiple variations of parameters
+
+To generate different cycles, random variations of the initial parameters will be made. This variations will move the initial parameters inside their range of operation without breaking the simulation. The objective is to generate 1000 cycles, each one different from the rest but all of them of the same process.
+
+```{r generate dataset}
+# This function decides the policy that the m_c variable will follow. It can
+# be always at maximum value, always at low value, progressive from low to high,
+# progressive from high to low or random all the way. Effective values of m_c
+# range from -5 to 5. Noise will be added to avoid constant vectors of m_c that
+# will hinder the learning algorithm afterwards.
+# x = numeric selector of the policy, should be sampled from a uniform inside the range [0,5]
+# returns the appropriate values of m_c for the policy selected
+decide_policy <- function(x){
+  if(x < 1)
+    res <- rep(5, 100) + rnorm(100, 0, 0.5)
+  else if(x < 2)
+    res <- rep(-5, 100) + rnorm(100, 0, 0.5)
+  else if(x < 3)
+    res <- seq(-4.9, 5, 0.1) + rnorm(100, 0, 0.25)
+  else if(x < 4)
+    res <- seq(4.9, -5, -0.1) + rnorm(100, 0, 0.25)
+  else
+    res <- rnorm(100, 0, 1.6)
+}
+
+set.seed(42)
+y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
+# Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
+# Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
+params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
+               rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
+               m_c = 0.5, t_min = 800, t_max = 1300, vol = 20,
+               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80)
+times <- seq(0, 99)
+
+res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
+n_cycles <- 1000
+res <- c()
+for(i in 1:n_cycles){
+  y <- c(
+    S_c = runif(1, 0.001, 0.5),
+    C_a = runif(1, 40,60),
+    T_1 = runif(1, 150, 250),
+    T_2 = runif(1, 350, 450))
+  
+  params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
+               rho_1 = runif(1, 810, 900), C_p1 = runif(1, 0.06, 0.2), 
+               rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
+               m_c = decide_policy(runif(1, 0, 5)), t_min = 800, t_max = 1300, vol = 20,
+               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 70)
+  
+  cyc <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
+  cyc <- cbind(cyc, matrix(params$rho_1, ncol = 1, nrow = 100, dimnames = list(NULL, "rho_1")))
+  cyc <- cbind(cyc, matrix(params$C_p1, ncol = 1, nrow = 100, dimnames = list(NULL, "C_p1")))
+  cyc <- cbind(cyc, matrix(params$m_c, ncol = 1, nrow = 100, dimnames = list(NULL, "m_c")))
+  cyc <- cbind(cyc, matrix(rep(i, 100), ncol = 1, nrow = 100, dimnames = list(NULL, "cyc")))
+  res <- rbind(res, cyc)
+}
+
+fwrite(as.data.table(res), file = "../dataset/dt_cycles.csv")
+
+```
+
+The dataset will be saved to the file "dt_cycles.csv". Further experimentation could be performed dividing the dataset into both train and test or by crossvalidation.
+
