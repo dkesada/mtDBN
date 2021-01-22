@@ -17,25 +17,31 @@ First, the synthetic dataset will be split in 67% train and 33% test. With that 
 
 ## Dataset split
 
+To begin the experiment, we will split the dataset into train and test, where 67% will be training data and 33% will be test. This split will be done by selection whole cycles from the original dataset. Once the split is performed, the datasets have to be folded to size = 2 and the instances that have overlapping values from different cycles have to be removed.
+
 ```{r init}
 library(dbnR)
 library(mtDBN)
 library(data.table)
 ```
 
-```{r test cycle}
+```{r prepare datasets}
+dt <- fread("../dataset/dt_cycles.csv")
+dt[, time := NULL]
 set.seed(42)
-y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
-# Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
-# Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
-params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
-               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
-               rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
-               m_c = 0.5, t_min = 800, t_max = 1300, vol = 20,
-               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80)
-times <- seq(0, 99)
+train_p <- 0.67
 
-res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
+ids <- dt[, unique(cyc)]
+train_ids <- sample(ids, round(length(ids) * train_p), replace = F)
 
-plot(res)
+dt_train <- dt[cyc %in% train_ids]
+dt_test <- dt[!(cyc %in% train_ids)]
+
+size <- 2
+id_var <- "cyc"
+
+f_dt_train <- dbnR::filtered_fold_dt(dt_train, size, id_var)
+f_dt_test <- dbnR::filtered_fold_dt(dt_test, size, id_var)
+dt_train[, (id_var) := NULL]
+dt_test[, (id_var) := NULL]
 ```

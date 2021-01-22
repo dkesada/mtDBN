@@ -56,6 +56,7 @@ in the pso part of the algorithm.
 \item \href{#method-fit_model}{\code{mtDBN$fit_model()}}
 \item \href{#method-forecast_ts}{\code{mtDBN$forecast_ts()}}
 \item \href{#method-export_tree}{\code{mtDBN$export_tree()}}
+\item \href{#method-get_models}{\code{mtDBN$get_models()}}
 \item \href{#method-clone}{\code{mtDBN$clone()}}
 }
 }
@@ -117,7 +118,7 @@ A new 'causlist' object
 \if{latex}{\out{\hypertarget{method-forecast_ts}{}}}
 \subsection{Method \code{forecast_ts()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{mtDBN$forecast_ts(f_dt, obj_vars, ini, len, prov_ev)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{mtDBN$forecast_ts(f_dt, obj_vars, ini, len, prov_ev, plot_res)}\if{html}{\out{</div>}}
 }
 
 }
@@ -153,6 +154,15 @@ in linux could be used.
 }
 \if{html}{\out{</div>}}
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_models"></a>}}
+\if{latex}{\out{\hypertarget{method-get_models}{}}}
+\subsection{Method \code{get_models()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{mtDBN$get_models()}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
