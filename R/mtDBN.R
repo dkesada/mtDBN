@@ -32,9 +32,9 @@ mtDBN <- R6::R6Class("mtDBN",
 
     },
 
-    forecast_ts = function(f_dt, obj_vars, ini, len, prov_ev){
+    forecast_ts = function(f_dt, obj_vars, ini, len, prov_ev, plot_res){
       # Security checks --ICO-Merge
-      preds_test <- private$forecast_val_data_tree(f_dt, obj_vars, ini, len, prov_ev)
+      preds_test <- private$forecast_val_data_tree(f_dt, obj_vars, ini, len, prov_ev, plot_res = plot_res)
     },
 
     #' @description
@@ -60,6 +60,10 @@ mtDBN <- R6::R6Class("mtDBN",
 
       if(!is.null(exp_dir))
         setwd(old_path)
+    },
+    
+    get_models = function(){
+      private$models
     }
 
   ),
@@ -195,6 +199,62 @@ mtDBN <- R6::R6Class("mtDBN",
       f_dt[, classif := NULL]
 
     },
+    
+    # --ICO-Merge duplicated function from dbnR
+    as_named_vector = function(dt){
+      res <- as.numeric(dt)
+      names(res) <- names(dt)
+     
+      return(res)
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    exact_prediction_step = function(fit, variables, evidence){
+      if(length(evidence) == 0)
+        evidence <- attr(fit,"mu")[bnlearn::root.nodes(fit)]
+      
+      res <- mvn_inference(attr(fit,"mu"), attr(fit,"sigma"), evidence)
+      res$mu_p <- as.list(res$mu_p[,1])
+      
+      return(res)
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    mae = function(orig, pred){
+      return(sum(abs(orig - pred))/length(orig))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    mae_by_col = function(dt, col){
+      return(private$mae(unlist(dt[,.SD, .SDcols = names(col)]), col))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    print_metrics = function(metrics, obj_vars){
+      print("The average MAE per execution is:", quote = FALSE)
+      sapply(obj_vars, function(x){print(paste0(x, ": ", round(metrics[x], 4)),
+                                         quote = FALSE)})
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    eval_metrics = function(dt_orig, preds, ini, len){
+      metrics <- lapply(names(preds), function(x){
+        preds[, private$mae_by_col(dt_orig[ini:(ini+len-1)],.SD), .SDcols = x]})
+      metrics <- unlist(metrics)
+      names(metrics) <- names(preds)
+      private$print_metrics(metrics, names(preds))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    plot_single_result = function(dt, results, var){
+      plot(ts(dt[, .SD, .SDcols = var]))
+      invisible(lines(results[, .SD, .SDcols = var], col = "blue"))
+    },
+    
+    # --ICO-Merge duplicated function from dbnR
+    plot_results = function(dt, results, obj_vars){
+      invisible(sapply(obj_vars, function(x){private$plot_single_result(dt, results, x)}))
+    },
 
     #' @description
     #' Classify a data.table with one row and select the appropriate model
@@ -202,17 +262,18 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @return the DBN model that corresponds to the instance
     get_model = function(instance){
       classif <- treeClust::rpart.predict.leaves(private$rtree, instance[, .SD, .SDcols = private$vars_t_0], type = "where")
-      print(classif)
+      #print(classif)
       return(private$models[[paste(classif)]])
     },
-
-    forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev){
+    
+    forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev, print_res = TRUE, plot_res = TRUE){
+      exec_time <- Sys.time()
       res <- matrix(nrow = len, ncol = length(obj_vars), data = 0.0)
       colnames(res) <- obj_vars
       res <- data.table(res)
-      instance <- f_dt[ini:(ini+1), .SD]
+      instance <- f_dt[ini, .SD]
 
-      # From the dbnR package, unify in a function --ICO-Merge
+      # Most of this is from the dbnR package, unify in a single function --ICO-Merge
       var_names <- names(instance)
       vars_pred_idx <- grep("t_0", var_names)
       vars_subs_idx <- grep("t_1", var_names)
@@ -224,29 +285,34 @@ mtDBN <- R6::R6Class("mtDBN",
       vars_pred_crop <- vars_pred[!(vars_pred %in% prov_ev)]
       vars_subs_crop <- sub("t_0","t_1", vars_pred_crop)
       prov_ev_subs <- sub("t_0","t_1", prov_ev)
-
+      
       for(i in 1:len){
-        instance[2] <- f_dt[ini + i, .SD]
-
-        # Classify with the tree and choose the model
-        fit <- private$get_model(instance[1])
-
         # Forecast with len 1 with the correct model
-        preds <- dbnR::forecast_ts(instance, fit, private$size, vars_pred_crop,
-                                   print_res = F, plot_res = F, prov_ev = prov_ev,)
+        preds <- private$exact_prediction_step(private$get_model(instance), vars_pred, 
+                                       private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
 
         # Move predictions into evidence
         if(length(vars_post) > 0)
-          instance[1, (vars_prev) := .SD, .SDcols = vars_post]
-        instance[1, (vars_subs_crop) := preds$pred[, .SD, .SDcols = vars_pred_crop]]
+          instance[, (vars_prev) := .SD, .SDcols = vars_post]
+        instance[, (vars_subs_crop) := preds$mu_p[vars_pred_crop]]
         if(!is.null(prov_ev)){
-          instance[1, (prov_ev_subs) := .SD, .SDcols = prov_ev]
-          instance[1, (prov_ev) := instance[2, .SD, .SDcols = prov_ev]]
+          instance[, (prov_ev_subs) := .SD, .SDcols = prov_ev]
+          instance[, (prov_ev) := f_dt[ini + i, .SD, .SDcols = prov_ev]]
         }
 
-        res[i, (obj_vars) := preds$pred[, .SD, .SDcols = obj_vars]]
+        res[i, (obj_vars) := preds$mu_p[obj_vars]]
       }
-
+      
+      exec_time <- exec_time - Sys.time()
+      
+      if(print_res){
+        print(exec_time)
+        private$eval_metrics(f_dt, res, ini, len)
+      }
+      
+      if(plot_res)
+        private$plot_results(f_dt[ini:(ini+len-1)], res, obj_vars)
+      
       return(res)
     }
   ))
