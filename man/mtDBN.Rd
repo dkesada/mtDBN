@@ -15,7 +15,7 @@ in the pso part of the algorithm.
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{tree}}{the tree structure}
+\item{\code{rtree}}{the tree structure}
 
 \item{\code{models}}{list of DBN models}
 
@@ -34,7 +34,7 @@ in the pso part of the algorithm.
 \section{Active bindings}{
 \if{html}{\out{<div class="r6-active-bindings">}}
 \describe{
-\item{\code{tree}}{the tree structure}
+\item{\code{rtree}}{the tree structure}
 
 \item{\code{models}}{list of DBN models}
 
@@ -57,6 +57,7 @@ in the pso part of the algorithm.
 \item \href{#method-forecast_ts}{\code{mtDBN$forecast_ts()}}
 \item \href{#method-export_tree}{\code{mtDBN$export_tree()}}
 \item \href{#method-get_models}{\code{mtDBN$get_models()}}
+\item \href{#method-get_tree}{\code{mtDBN$get_tree()}}
 \item \href{#method-clone}{\code{mtDBN$clone()}}
 }
 }
@@ -161,6 +162,15 @@ in linux could be used.
 \subsection{Method \code{get_models()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{mtDBN$get_models()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_tree"></a>}}
+\if{latex}{\out{\hypertarget{method-get_tree}{}}}
+\subsection{Method \code{get_tree()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{mtDBN$get_tree()}\if{html}{\out{</div>}}
 }
 
 }

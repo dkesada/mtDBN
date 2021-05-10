@@ -45,3 +45,44 @@ f_dt_test <- dbnR::filtered_fold_dt(dt_test, size, id_var)
 dt_train[, (id_var) := NULL]
 dt_test[, (id_var) := NULL]
 ```
+
+Once the dataset is prepared for training, we are ready to fit both the mtDBN and regular DBN models and see how well they perform on synthetic data
+
+```{r fit network}
+mode <- 2
+set.seed(42)
+mv <- F
+homogen <- T
+
+if(mv){
+  obj_vars <- c("T_1","T_2", "S_c", "C_a", "C_p1", "rho_1")
+}else{
+  obj_vars <- "T_1"
+}
+
+if(mode == 1){
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "dmmhc", f_dt = f_dt_train)
+  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  model <- mtDBN::mtDBN$new()
+  model$fit_model(dt_train, size, method = "dmmhc", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 6, f_dt = f_dt_train, prune_val = 0.045)
+} else{
+  # Single dbn model
+  print("Single model training.")
+  tmp <- Sys.time()
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 50, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25))
+  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  print(tmp - Sys.time())
+  
+  print("----------------------")
+  
+  # mtDBN model
+  print("mtDBN training.")
+  tmp <- Sys.time()
+  model <- mtDBN::mtDBN$new()
+  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 6, f_dt = f_dt_train, n_it = 50, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.045)
+  print(tmp - Sys.time())
+  print("Model training finish.")
+  
+} 
+
+```

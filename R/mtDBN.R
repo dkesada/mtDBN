@@ -1,7 +1,6 @@
 #' R6 class that defines the tree + DBN model with the rpart package
 #'
-#' The causal lists will be the base of the positions and the velocities
-#' in the pso part of the algorithm.
+#' The model is defined as a tree with several DBNs learned for each node.
 #' @export
 mtDBN <- R6::R6Class("mtDBN",
   public = list(
@@ -61,15 +60,20 @@ mtDBN <- R6::R6Class("mtDBN",
       if(!is.null(exp_dir))
         setwd(old_path)
     },
-    
+
     get_models = function(){
       private$models
+    },
+
+    # --ICO-Merge just for debugging, delete
+    get_tree = function(){
+      private$rtree
     }
 
   ),
 
   private = list(
-    #' @field tree the tree structure
+    #' @field rtree the tree structure
     rtree = NULL,
     #' @field models list of DBN models
     models = NULL,
@@ -199,43 +203,43 @@ mtDBN <- R6::R6Class("mtDBN",
       f_dt[, classif := NULL]
 
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     as_named_vector = function(dt){
       res <- as.numeric(dt)
       names(res) <- names(dt)
-     
+
       return(res)
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     exact_prediction_step = function(fit, variables, evidence){
       if(length(evidence) == 0)
         evidence <- attr(fit,"mu")[bnlearn::root.nodes(fit)]
-      
+
       res <- mvn_inference(attr(fit,"mu"), attr(fit,"sigma"), evidence)
       res$mu_p <- as.list(res$mu_p[,1])
-      
+
       return(res)
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     mae = function(orig, pred){
       return(sum(abs(orig - pred))/length(orig))
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     mae_by_col = function(dt, col){
       return(private$mae(unlist(dt[,.SD, .SDcols = names(col)]), col))
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     print_metrics = function(metrics, obj_vars){
       print("The average MAE per execution is:", quote = FALSE)
       sapply(obj_vars, function(x){print(paste0(x, ": ", round(metrics[x], 4)),
                                          quote = FALSE)})
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     eval_metrics = function(dt_orig, preds, ini, len){
       metrics <- lapply(names(preds), function(x){
@@ -244,13 +248,13 @@ mtDBN <- R6::R6Class("mtDBN",
       names(metrics) <- names(preds)
       private$print_metrics(metrics, names(preds))
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     plot_single_result = function(dt, results, var){
       plot(ts(dt[, .SD, .SDcols = var]))
       invisible(lines(results[, .SD, .SDcols = var], col = "blue"))
     },
-    
+
     # --ICO-Merge duplicated function from dbnR
     plot_results = function(dt, results, obj_vars){
       invisible(sapply(obj_vars, function(x){private$plot_single_result(dt, results, x)}))
@@ -265,7 +269,7 @@ mtDBN <- R6::R6Class("mtDBN",
       #print(classif)
       return(private$models[[paste(classif)]])
     },
-    
+
     forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev, print_res = TRUE, plot_res = TRUE){
       exec_time <- Sys.time()
       res <- matrix(nrow = len, ncol = length(obj_vars), data = 0.0)
@@ -285,10 +289,10 @@ mtDBN <- R6::R6Class("mtDBN",
       vars_pred_crop <- vars_pred[!(vars_pred %in% prov_ev)]
       vars_subs_crop <- sub("t_0","t_1", vars_pred_crop)
       prov_ev_subs <- sub("t_0","t_1", prov_ev)
-      
+
       for(i in 1:len){
         # Forecast with len 1 with the correct model
-        preds <- private$exact_prediction_step(private$get_model(instance), vars_pred, 
+        preds <- private$exact_prediction_step(private$get_model(instance), vars_pred,
                                        private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
 
         # Move predictions into evidence
@@ -302,17 +306,17 @@ mtDBN <- R6::R6Class("mtDBN",
 
         res[i, (obj_vars) := preds$mu_p[obj_vars]]
       }
-      
+
       exec_time <- exec_time - Sys.time()
-      
+
       if(print_res){
         print(exec_time)
         private$eval_metrics(f_dt, res, ini, len)
       }
-      
+
       if(plot_res)
         private$plot_results(f_dt[ini:(ini+len-1)], res, obj_vars)
-      
+
       return(res)
     }
   ))
