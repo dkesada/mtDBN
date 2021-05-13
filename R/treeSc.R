@@ -13,6 +13,7 @@ treeSc <- R6::R6Class("treeSc",
         cuts <- labels(tree) # The bloody cuts are in the labels of the object. It took me a while to figure this one out
         cuts_e <- parse(text = cuts)
         nodes <- as.numeric(row.names(tree$frame)) # The nodes are in preorder
+        private$n_nodes <- length(nodes)
         depth <- private$tree_depth(nodes)
         e <- new.env()
         e$i <- 1
@@ -23,13 +24,22 @@ treeSc <- R6::R6Class("treeSc",
         return(private$tree_sc)
       },
 
-      # Given a dataset, return the appropriate model for each row
+      # Given a dataset, return a new data.table with the appropriate model for
+      # each row. Used for dividing each instance for different dbn training.
       classify_dt = function(dt){
-        return(0)
+        idx <- dt[, .I]
+        c_names <- sapply(1:private$n_nodes, function(x){paste0("node_",x)}) # Each node will have its own column
+        dt[, eval(c_names) := 0]
+
+        dt <- private$classify_dt_rec(dt, idx, private$tree_sc)
+        res <- dt[, .SD, .SDcols = c_names]
+        dt[, eval(c_names) := NULL]
+
+        return(res)
       },
 
       #' @description
-      #' Given an instance, return the appropriate model and the parent model
+      #' Given an instance, return the appropriate node
       #' @param inst a row from a data.table
       #' @return
       classify_inst = function(inst){
@@ -38,15 +48,19 @@ treeSc <- R6::R6Class("treeSc",
         while(!is.null(node_i$r_node) && !is.null(node_i$l_node)){ # While not in a leaf
           if(nrow(inst[eval(node_i$l_node$cut_e)]))
             node_i <- node_i$l_node
+          else
+            node_i <- node_i$r_node
         }
 
-        return(0)
+        return(node_i)
       }
     ),
 
     private = list(
       #' @field tree_sc the tree structure scheme
       tree_sc = NULL,
+      #' @field n_nodes the total number of nodes in the tree
+      n_nodes = NULL,
 
       #' @description
       #' Returns the depth of each node in a tree.
@@ -102,6 +116,22 @@ treeSc <- R6::R6Class("treeSc",
         res$cut_e <- cut_e
 
         return(res)
+      },
+
+      # Given a dataset and the corresponding node, recursively classify it
+      classify_dt_rec = function(dt, idx, node){
+
+        dt[idx, eval(paste0("node_", node$name)) := 1] # Always note the instances of a node
+
+        if(!is.null(node$l_node)){ # If not in a root node
+          idx_1 <- dt[idx, which(eval(node$l_node$cut_e))] # Apply the cuts. More readable than in 1 line
+          dt <- private$classify_dt_rec(dt, idx_1, node$l_node)
+
+          idx_2 <- dt[idx, which(eval(node$r_node$cut_e))]
+          dt <- private$classify_dt_rec(dt, idx_2, node$r_node)
+        }
+
+        return(dt)
       }
       )
 
