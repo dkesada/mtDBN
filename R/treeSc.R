@@ -10,6 +10,7 @@ treeSc <- R6::R6Class("treeSc",
       #' @param tree the rpart tree that we want to get the structure from
       #' @return A new 'treeSc' object
       initialize = function(tree){
+        private$rtree <- tree
         cuts <- labels(tree) # The bloody cuts are in the labels of the object. It took me a while to figure this one out
         cuts_e <- parse(text = cuts)
         nodes <- as.numeric(row.names(tree$frame)) # The nodes are in preorder
@@ -24,11 +25,14 @@ treeSc <- R6::R6Class("treeSc",
         return(private$tree_sc)
       },
 
-      # Given a dataset, return a new data.table with the appropriate model for
-      # each row. Used for dividing each instance for different dbn training.
+      #' @description
+      #' Given a dataset, return a new data.table with the appropriate model for
+      #' each row. Used for dividing each instance for different dbn training.
+      #' @param dt the dataset to be classified
+      #' @return a dataset with the nodes that each instance falls into
       classify_dt = function(dt){
         idx <- dt[, .I]
-        c_names <- sapply(1:private$n_nodes, function(x){paste0("node_",x)}) # Each node will have its own column
+        c_names <- as.character(1:private$n_nodes) # Each node will have its own column
         dt[, eval(c_names) := 0]
 
         dt <- private$classify_dt_rec(dt, idx, private$tree_sc)
@@ -41,7 +45,7 @@ treeSc <- R6::R6Class("treeSc",
       #' @description
       #' Given an instance, return the appropriate node
       #' @param inst a row from a data.table
-      #' @return
+      #' @return the environment of the corresponding node
       classify_inst = function(inst){
         node_i <- private$tree_sc
 
@@ -53,10 +57,20 @@ treeSc <- R6::R6Class("treeSc",
         }
 
         return(node_i)
+      },
+
+      #' @description
+      #' Getter of the original rpart tree
+      #' --ICO-Merge: delete if it remains unused
+      #' @return the original rpart object
+      get_rtree = function(){
+        return(private$rtree)
       }
     ),
 
     private = list(
+      #' @field tree_rpart the original rpart object
+      rtree = NULL,
       #' @field tree_sc the tree structure scheme
       tree_sc = NULL,
       #' @field n_nodes the total number of nodes in the tree
@@ -118,16 +132,23 @@ treeSc <- R6::R6Class("treeSc",
         return(res)
       },
 
-      # Given a dataset and the corresponding node, recursively classify it
+      #' @description
+      #' Given a dataset and the corresponding node, recursively classify it.
+      #' This is the private and recursive part of the function.
+      #' @param dt the dataset that is being classified
+      #' @param idx the specific rows of the dataset that are being processed
+      #' @param node the environment of the tree node that the algorithm is traversing
+      #' @return the classified dataset of the whole subtree
       classify_dt_rec = function(dt, idx, node){
 
-        dt[idx, eval(paste0("node_", node$name)) := 1] # Always note the instances of a node
+        dt[idx, eval(as.character(node$name)) := 1] # Always note the instances of a node
 
         if(!is.null(node$l_node)){ # If not in a root node
           idx_1 <- dt[idx, which(eval(node$l_node$cut_e))] # Apply the cuts. More readable than in 1 line
+          idx_1 <- idx[idx_1] # Notice that the previous line returns indexes from 1 to len(idx) due to the 'which'
           dt <- private$classify_dt_rec(dt, idx_1, node$l_node)
 
-          idx_2 <- dt[idx, which(eval(node$r_node$cut_e))]
+          idx_2 <- idx[dt[idx, which(eval(node$r_node$cut_e))]]
           dt <- private$classify_dt_rec(dt, idx_2, node$r_node)
         }
 

@@ -18,7 +18,9 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param max_depth maximum depth of the tree
     #' @param ... additional parameters for the structure learning
     #' @return A new 'causlist' object
-    fit_model = function(dt_train, size, method, obj_var, mv = FALSE, f_dt = NULL, homogen = TRUE, prune_val = 0.030, min_ind = 160, inc = 0.005, max_depth = 3, ...){
+    fit_model = function(dt_train, size, method, obj_var, mv = FALSE,
+                         f_dt = NULL, homogen = TRUE, prune_val = 0.030,
+                         min_ind = 160, inc = 0.005, max_depth = 3, ...){
       # Security checks --ICO-Merge
       if(dim(dt_train)[1] < min_ind) # Turn into a new sec. check --ICO-MERGE
         stop("The number of instances per leaf is higher than the size of the dataset. No tree can be made.")
@@ -33,6 +35,7 @@ mtDBN <- R6::R6Class("mtDBN",
 
     forecast_ts = function(f_dt, obj_vars, ini, len, prov_ev, plot_res){
       # Security checks --ICO-Merge
+      # Also, check that obj_vars exist
       preds_test <- private$forecast_val_data_tree(f_dt, obj_vars, ini, len, prov_ev, plot_res = plot_res)
     },
 
@@ -45,7 +48,8 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param height height of the exported image
     #' @param paper size of the image. Set to special so that width and height can be used
     #' @param horizontal the orientation of the image. Horizontal if true, vertical otherwise.
-    export_tree = function(exp_dir = NULL, width = 20, height = 20, paper = "special", horizontal = FALSE){
+    export_tree = function(exp_dir = NULL, width = 20, height = 20,
+                           paper = "special", horizontal = FALSE){
       if(!is.null(exp_dir)){
         old_path <- getwd()
         setwd(exp_dir)
@@ -73,14 +77,12 @@ mtDBN <- R6::R6Class("mtDBN",
   ),
 
   private = list(
-    #' @field rtree the tree structure
-    rtree = NULL,
+    #' @field tree_sc the tree structure scheme
+    tree_sc = NULL,
     #' @field models list of DBN models
     models = NULL,
     #' @field cl Total number of DBN models
     n_models = NULL,
-    #' @field vars_t_0 names of the t_0 variables
-    vars_t_0 = NULL,
     #' @field f_vars names of the t_0 variables
     f_vars = NULL,
     #' @field size the size of the networks learned
@@ -99,23 +101,6 @@ mtDBN <- R6::R6Class("mtDBN",
     },
 
     #' @description
-    #' Counts the number of instances from the training dataset in each leaf node
-    #' of the tree after classifying them.
-    #' @param rt the rpart tree object used
-    #' @param dt_train the training datset
-    #' @return a vector with the number of instances in each class
-    sum_unique = function(rt, dt_t_0){
-      classif <- treeClust::rpart.predict.leaves(rt, dt_t_0, type = "where")
-      u_classif <- unique(classif)
-      s_classif <- rep(0, length(u_classif))
-
-      for(i in classif)
-        s_classif[u_classif == i] <- s_classif[u_classif == i] + 1
-
-      return(s_classif)
-    },
-
-    #' @description
     #' Builds and prunes an univariate or multivariate tree.
     #' @param mv if TRUE, a multivariate tree will be made. If FALSE, it will be univariate
     #' @param formula the formula fo the regression tree
@@ -123,6 +108,7 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param method the tree building method
     #' @param max_depth maximum depth of the tree
     #' @param prune_val complexity parameter for the rpart prune function
+    #' @return the generated tree
     build_tree = function(mv, formula, data, max_depth, prune_val){
       res <- NULL
       if(mv){
@@ -149,7 +135,6 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param max_depth maximum depth of the tree
     adjust_tree = function(dt_train, obj_var, mv, prune_val, min_ind, inc, max_depth){
       dt_t_0 <- dbnR::time_rename(dt_train)
-      private$vars_t_0 <- copy(names(dt_t_0))
       pred_vars <- names(dt_t_0)
       obj_var <- paste0(obj_var, "_t_0")
       pred_vars <- pred_vars[!(pred_vars %in% obj_var)]
@@ -159,11 +144,12 @@ mtDBN <- R6::R6Class("mtDBN",
         res <- private$build_tree(mv, formula = private$formulate(obj_var, pred_vars),
                                   data = dt_t_0, max_depth = max_depth, prune_val = prune_val)
 
-        valid <- min_ind <= min(private$sum_unique(res, dt_t_0))
+        valid <- min_ind <= min(res$frame$n)
         prune_val <- prune_val + inc
       }
 
-      private$rtree <- res
+      private$tree_sc <- treeSc$new(res)
+
     },
 
     #' @description
@@ -173,35 +159,25 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param size the size of the networks learned
     #' @param method the structure learning method used
     #' @param f_dt a previously folded dataset, in case some rows had to be deleted beforehand
-    #' @param ... additional parameters for the structure learning. An already folded dataset can be passed
+    #' @param ... additional parameters for the structure learning
     #' @import data.table
     fit_leaves = function(dt_train, size, method, f_dt = NULL, ...){
       if(is.null(f_dt))
         f_dt <- dbnR::fold_dt(dt_train, size)
-      private$f_vars <- copy(names(f_dt))
       private$size <- size
-      f_dt[, classif := treeClust::rpart.predict.leaves(private$rtree, f_dt[, .SD, .SDcols = private$vars_t_0], type = "where")] # Code local replacement
+      classif <- private$tree_sc$classify_dt(f_dt)
 
       if(private$homogen)
-        network <- dbnR::learn_dbn_struc(dt_train, size, method, ...)
-      else{
-        dt_class <- dbnR::time_rename(dt_train)
-        dt_class[, classif := treeClust::rpart.predict.leaves(private$rtree, dt_class, type = "where")]
-        dt_class[, idx := .I]
-      }
+        network <- dbnR::learn_dbn_struc(NULL, size, method, f_dt = f_dt, ...)
 
-      private$n_models <- length(unique(f_dt$classif))
+      private$n_models <- dim(classif)[2]
       private$models <- vector(mode = "list", private$n_models)
-      names(private$models) <- unique(f_dt$classif) # The names of the list will be the internal number of the leaf nodes. Kind of a dictionary style access, but O(n)
 
-      for(i in unique(f_dt$classif)){
+      for(i in names(classif)){
         if(!private$homogen)
-          network <- dbnR::learn_dbn_struc(dt_train[dt_class[classif == i, idx]], size, method, ...)
-        private$models[[paste(i)]] <- dbnR::fit_dbn_params(network, f_dt[classif == i, .SD, .SDcols = private$f_vars])
+          network <- dbnR::learn_dbn_struc(NULL, size, method, f_dt = f_dt[classif[, which(.SD == 1), .SDcols = i]], ...)
+        private$models[[i]] <- dbnR::fit_dbn_params(network, f_dt[classif[, which(.SD == 1), .SDcols = i]])
       }
-
-      f_dt[, classif := NULL]
-
     },
 
     # --ICO-Merge duplicated function from dbnR
@@ -265,9 +241,9 @@ mtDBN <- R6::R6Class("mtDBN",
     #' @param instance a data.table with one row
     #' @return the DBN model that corresponds to the instance
     get_model = function(instance){
-      classif <- treeClust::rpart.predict.leaves(private$rtree, instance[, .SD, .SDcols = private$vars_t_0], type = "where")
-      #print(classif)
-      return(private$models[[paste(classif)]])
+      node <- private$tree_sc$classify_inst(instance)
+
+      return(private$models[[as.character(node$name)]])
     },
 
     forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev, print_res = TRUE, plot_res = TRUE){
@@ -291,7 +267,7 @@ mtDBN <- R6::R6Class("mtDBN",
       prov_ev_subs <- sub("t_0","t_1", prov_ev)
 
       for(i in 1:len){
-        # Forecast with len 1 with the correct model
+        # Forecast with len 1 with the correct model. Insert here operations of means
         preds <- private$exact_prediction_step(private$get_model(instance), vars_pred,
                                        private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
 

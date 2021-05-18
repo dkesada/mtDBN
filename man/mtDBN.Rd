@@ -9,19 +9,16 @@ R6 class that defines the tree + DBN model with the rpart package
 R6 class that defines the tree + DBN model with the rpart package
 }
 \details{
-The causal lists will be the base of the positions and the velocities
-in the pso part of the algorithm.
+The model is defined as a tree with several DBNs learned for each node.
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{rtree}}{the tree structure}
+\item{\code{tree_sc}}{the tree structure scheme}
 
 \item{\code{models}}{list of DBN models}
 
 \item{\code{cl}}{Total number of DBN models}
-
-\item{\code{vars_t_0}}{names of the t_0 variables}
 
 \item{\code{f_vars}}{names of the t_0 variables}
 
@@ -34,13 +31,11 @@ in the pso part of the algorithm.
 \section{Active bindings}{
 \if{html}{\out{<div class="r6-active-bindings">}}
 \describe{
-\item{\code{rtree}}{the tree structure}
+\item{\code{tree_sc}}{the tree structure scheme}
 
 \item{\code{models}}{list of DBN models}
 
 \item{\code{cl}}{Total number of DBN models}
-
-\item{\code{vars_t_0}}{names of the t_0 variables}
 
 \item{\code{f_vars}}{names of the t_0 variables}
 
