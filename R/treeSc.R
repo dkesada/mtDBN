@@ -13,7 +13,8 @@ treeSc <- R6::R6Class("treeSc",
         private$rtree <- tree
         cuts <- labels(tree) # The bloody cuts are in the labels of the object. It took me a while to figure this one out
         cuts_e <- parse(text = cuts)
-        nodes <- as.numeric(row.names(tree$frame)) # The nodes are in preorder
+        private$node_names <- row.names(tree$frame)
+        nodes <- as.numeric(private$node_names) # The nodes are in preorder
         private$n_nodes <- length(nodes)
         depth <- private$tree_depth(nodes)
         e <- new.env()
@@ -32,12 +33,11 @@ treeSc <- R6::R6Class("treeSc",
       #' @return a dataset with the nodes that each instance falls into
       classify_dt = function(dt){
         idx <- dt[, .I]
-        c_names <- as.character(1:private$n_nodes) # Each node will have its own column
-        dt[, eval(c_names) := 0]
+        dt[, eval(private$node_names) := 0] # Each node will have its own column
 
         dt <- private$classify_dt_rec(dt, idx, private$tree_sc)
-        res <- dt[, .SD, .SDcols = c_names]
-        dt[, eval(c_names) := NULL]
+        res <- dt[, .SD, .SDcols = private$node_names]
+        dt[, eval(private$node_names) := NULL]
 
         return(res)
       },
@@ -75,6 +75,8 @@ treeSc <- R6::R6Class("treeSc",
       tree_sc = NULL,
       #' @field n_nodes the total number of nodes in the tree
       n_nodes = NULL,
+      #' @field node_names the names of the nodes in the tree
+      node_names = NULL,
 
       #' @description
       #' Returns the depth of each node in a tree.

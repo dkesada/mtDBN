@@ -114,7 +114,16 @@ A new 'causlist' object
 \if{latex}{\out{\hypertarget{method-forecast_ts}{}}}
 \subsection{Method \code{forecast_ts()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{mtDBN$forecast_ts(f_dt, obj_vars, ini, len, prov_ev, plot_res)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{mtDBN$forecast_ts(
+  f_dt,
+  obj_vars,
+  ini,
+  len,
+  prov_ev,
+  print_res = TRUE,
+  plot_res = TRUE,
+  debug_m = TRUE
+)}\if{html}{\out{</div>}}
 }
 
 }

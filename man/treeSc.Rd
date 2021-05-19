@@ -20,6 +20,8 @@ in the pso part of the algorithm.
 \item{\code{tree_sc}}{the tree structure scheme}
 
 \item{\code{n_nodes}}{the total number of nodes in the tree}
+
+\item{\code{node_names}}{the names of the nodes in the tree}
 }
 \if{html}{\out{</div>}}
 }
@@ -31,6 +33,8 @@ in the pso part of the algorithm.
 \item{\code{tree_sc}}{the tree structure scheme}
 
 \item{\code{n_nodes}}{the total number of nodes in the tree}
+
+\item{\code{node_names}}{the names of the nodes in the tree}
 }
 \if{html}{\out{</div>}}
 }

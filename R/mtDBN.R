@@ -33,10 +33,11 @@ mtDBN <- R6::R6Class("mtDBN",
 
     },
 
-    forecast_ts = function(f_dt, obj_vars, ini, len, prov_ev, plot_res){
+    forecast_ts = function(f_dt, obj_vars, ini, len, prov_ev, print_res = TRUE, plot_res = TRUE, debug_m = TRUE){
       # Security checks --ICO-Merge
       # Also, check that obj_vars exist
-      preds_test <- private$forecast_val_data_tree(f_dt, obj_vars, ini, len, prov_ev, plot_res = plot_res)
+      preds_test <- private$forecast_val_data_tree(f_dt, obj_vars, ini, len, prov_ev,
+                                                   print_res = print_res, plot_res = plot_res, debug_m = debug_m)
     },
 
     #' @description
@@ -246,7 +247,7 @@ mtDBN <- R6::R6Class("mtDBN",
       return(private$models[[as.character(node$name)]])
     },
 
-    forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev, print_res = TRUE, plot_res = TRUE){
+    forecast_val_data_tree = function(f_dt, obj_vars, ini, len, prov_ev, print_res, plot_res, debug_m){
       exec_time <- Sys.time()
       res <- matrix(nrow = len, ncol = length(obj_vars), data = 0.0)
       colnames(res) <- obj_vars
@@ -267,9 +268,19 @@ mtDBN <- R6::R6Class("mtDBN",
       prov_ev_subs <- sub("t_0","t_1", prov_ev)
 
       for(i in 1:len){
-        # Forecast with len 1 with the correct model. Insert here operations of means
+        # Forecast with len 1 with the correct model
         preds <- private$exact_prediction_step(private$get_model(instance), vars_pred,
                                        private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
+
+        # Inserted means with parent models. Experimental setup, should be merged with the previous line
+        node <- private$tree_sc$classify_inst(instance)
+        parent_model <- private$models[[as.character(node$p_node$name)]]
+        preds_p <- private$exact_prediction_step(parent_model, vars_pred,
+                                       private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
+        preds$mu_p <- Map(function(x,y){mean(c(x,y))}, preds$mu_p, preds_p$mu_p)
+
+        if(debug_m)
+          print(private$tree_sc$classify_inst(instance)$name)
 
         # Move predictions into evidence
         if(length(vars_post) > 0)
