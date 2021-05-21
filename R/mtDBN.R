@@ -72,7 +72,7 @@ mtDBN <- R6::R6Class("mtDBN",
 
     # --ICO-Merge just for debugging, delete
     get_tree = function(){
-      private$rtree
+      private$tree_sc
     }
 
   ),
@@ -269,15 +269,10 @@ mtDBN <- R6::R6Class("mtDBN",
 
       for(i in 1:len){
         # Forecast with len 1 with the correct model
-        preds <- private$exact_prediction_step(private$get_model(instance), vars_pred,
-                                       private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
+        #preds <- private$exact_prediction_step(private$get_model(instance), vars_pred,
+        #                               private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
 
-        # Inserted means with parent models. Experimental setup, should be merged with the previous line
-        node <- private$tree_sc$classify_inst(instance)
-        parent_model <- private$models[[as.character(node$p_node$name)]]
-        preds_p <- private$exact_prediction_step(parent_model, vars_pred,
-                                       private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
-        preds$mu_p <- Map(function(x,y){mean(c(x,y))}, preds$mu_p, preds_p$mu_p)
+        preds <- private$smooth_pred(instance, vars_pred, vars_ev, prov_ev)
 
         if(debug_m)
           print(private$tree_sc$classify_inst(instance)$name)
@@ -305,5 +300,25 @@ mtDBN <- R6::R6Class("mtDBN",
         private$plot_results(f_dt[ini:(ini+len-1)], res, obj_vars)
 
       return(res)
+    },
+
+    # Smooth the predictions in the leafs with the parent models
+    smooth_pred = function(instance, vars_pred, vars_ev, prov_ev){
+      k = 15
+      # Forecast with len 1 with the correct model
+      preds <- private$exact_prediction_step(private$get_model(instance), vars_pred,
+                                             private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
+
+      # Operate the M5 smoothing up to the root node
+      node <- private$tree_sc$classify_inst(instance)
+      #while(node$p_node != "(root)"){
+        parent_model <- private$models[[as.character(node$p_node$name)]]
+        preds_p <- private$exact_prediction_step(parent_model, vars_pred,
+                                                 private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
+        preds$mu_p <- Map(function(x,y){(node$n * x + k * y) / (node$n + k)}, preds$mu_p, preds_p$mu_p)
+        node <- node$p_node
+      #}
+
+      return(preds)
     }
   ))

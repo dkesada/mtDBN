@@ -130,6 +130,7 @@ treeSc <- R6::R6Class("treeSc",
         res$r_node <- NULL
         res$p_node <- parent
         res$cut_e <- cut_e
+        res$n <- private$rtree$frame[as.character(name), "n"]
 
         return(res)
       },
