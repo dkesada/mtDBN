@@ -30,22 +30,24 @@ source("../R/utils.R")
 
 ```{r test cycle}
 set.seed(42)
-y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
+y <- c(S_c = 1, C_a = 50, T_1 = 200, T_2 = 400)
 # Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
 # Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
-params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
-               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
+params <- list(A_2 = 0.01, A_3 = 20, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 18.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 3e3,
                rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
-               m_c = 0.5, t_min = 800, t_max = 1300, vol = 20,
-               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80)
+               m_c = 0.5, t_min = 800, t_max = 1300,
+               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80,
+               C_in = 2, C_out = 2, vol = 10, C_ain = 50)
 times <- seq(0, 99)
 
 res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
 
+
 plot(res)
 ```
 
-The aspect of the cycle is similar to what the average cycle is expected to look like. The noise will model the uncertainty that a real system would have. Increasing $m_c$ would increase $T_2$ and in turn allow for a higher value of $S_c$ without loosing temperature in $T_1$. The 'objective' of a simulation should be to maintain the value of $T_1$ at a certain value without surpassing a limit temperature in $T_2$, which would become impossible at some point due to the insulating factor of $S_c$ and the system should be stopped. That is the original optimization problem behind the simulation, but we will focus on modelling the process itself rather than optimizing the usage of $m_c$. 
+The aspect of the cycle is similar to what the average cycle is expected to look like. The noise will model the uncertainty that a real system would have. Increasing $m_c$ would increase $T_2$ and $T_1$, but in turn generate a higher value of $S_c$ diminishing the heat transfer between both temperatures and so lowering $T_1$. The 'objective' of a simulation should be to maintain the value of $T_1$ at a certain value without surpassing a limit temperature in $T_2$, which would become impossible at some point due to the insulating factor of $S_c$ and the system should be stopped. That is the original optimization problem behind the simulation, but we will focus on modelling the process itself rather than optimizing the usage of $m_c$. 
 
 First, we will time what appending method to use. Four possible methods could be: using 'rbind' to append the matrices resulting of each cycle, using 'rbindlist' and converting the results to a 'data.table', using 'rbind' with the original matrix being in an environment and using 'rbind' with an R6 class.  
 
@@ -124,14 +126,15 @@ decide_policy <- function(x){
 }
 
 set.seed(42)
-y <- c(S_c = 0.001, C_a = 50, T_1 = 200, T_2 = 400)
+y <- c(S_c = 1, C_a = 50, T_1 = 200, T_2 = 400)
 # Fluid rho and C_p equal to those of oil in kg/m3 and mW/(m K) respectively
 # Tube rho and C_p equal to those of steel with 1% carbon in kg/m3 and W/(m K) respectively
-params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
-               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
+params <- list(A_2 = 0.01, A_3 = 20, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 18.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 3e3,
                rho_1 = 847, C_p1 = 0.12, rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
-               m_c = 0.5, t_min = 800, t_max = 1300, vol = 20,
-               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80)
+               m_c = 0.5, t_min = 800, t_max = 1300,
+               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80,
+               C_in = 2, C_out = 2, vol = 10, C_ain = 50)
 times <- seq(0, 99)
 
 res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
@@ -144,20 +147,29 @@ for(i in 1:n_cycles){
     T_1 = runif(1, 150, 250),
     T_2 = runif(1, 350, 450))
   
-  params <- list(A_2 = 0.01, A_3 = 0.52e2, A_3_p = 0.52e2, A_4 = 0.08, 
-               A_5 = 10.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 0.3,
-               rho_1 = runif(1, 810, 900), C_p1 = runif(1, 0.06, 0.2), 
+  c_in_out <- runif(1, 1, 4)
+  
+  params <- list(A_2 = 0.01, A_3 = 20, A_3_p = 0.52e2, A_4 = 0.08, 
+               A_5 = 18.8e3, A_5_p = 10.8e3, R = 8.314463, A_1 = 3e3,
+               rho_1 = runif(1, 810, 900), C_p1 = runif(1, 0.06, 0.2),
                rho_2 = 8050, C_p2 = 43, eps_2 = 0.4e-05,
-               m_c = decide_policy(runif(1, 0, 5)), t_min = 800, t_max = 1300, vol = 20,
-               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 70)
+               m_c = decide_policy(runif(1, 0, 5)), t_min = 800, t_max = 1300,
+               delta_p = 12e5, mu_1 = 30, l = 1, Tin = 50, r = 0.019, A_6 = 0.1, Q_in = 80,
+               C_in = c_in_out, C_out = c_in_out, vol = runif(1, 10, 30), C_ain = runif(1, 40, 60))
   
   cyc <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
   cyc <- cbind(cyc, matrix(params$rho_1, ncol = 1, nrow = 100, dimnames = list(NULL, "rho_1")))
   cyc <- cbind(cyc, matrix(params$C_p1, ncol = 1, nrow = 100, dimnames = list(NULL, "C_p1")))
   cyc <- cbind(cyc, matrix(params$m_c, ncol = 1, nrow = 100, dimnames = list(NULL, "m_c")))
+  cyc <- cbind(cyc, matrix(params$C_in, ncol = 1, nrow = 100, dimnames = list(NULL, "C_in")))
+  cyc <- cbind(cyc, matrix(params$vol, ncol = 1, nrow = 100, dimnames = list(NULL, "vol")))
+  cyc <- cbind(cyc, matrix(params$C_ain, ncol = 1, nrow = 100, dimnames = list(NULL, "C_ain")))
   cyc <- cbind(cyc, matrix(rep(i, 100), ncol = 1, nrow = 100, dimnames = list(NULL, "cyc")))
   res <- rbind(res, cyc)
 }
+
+res <- as.data.table(res)
+res[, time := NULL]
 
 fwrite(as.data.table(res), file = "../dataset/dt_cycles.csv")
 

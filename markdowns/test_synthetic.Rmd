@@ -27,7 +27,6 @@ library(data.table)
 
 ```{r prepare datasets}
 dt <- fread("../dataset/dt_cycles.csv")
-dt[, time := NULL]
 set.seed(42)
 train_p <- 0.67
 
@@ -84,5 +83,24 @@ if(mode == 1){
   print("Model training finish.")
   
 } 
+
+```
+
+```{r forecasting, eval=FALSE}
+ini <- 301
+len <- 400
+
+# I need some noise, too many constant intervals
+
+obj_vars <- c("T_1_t_0")
+ev_vars <- c("S_c_t_0", "C_a_t_0", "T_2_t_0", "rho_1_t_0", "C_p1_t_0", "m_c_t_0", "C_in_t_0", "vol_t_0", "C_ain_t_0")
+
+print("Forecasting time for single net: ")
+res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+
+print("----------------------")
+
+print("Forecasting time for mtDBN")
+res <- model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
 
 ```
