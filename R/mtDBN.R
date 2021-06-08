@@ -274,6 +274,9 @@ mtDBN <- R6::R6Class("mtDBN",
 
         preds <- private$smooth_pred(instance, vars_pred, vars_ev, prov_ev)
 
+        if(is.null(names(preds$mu_p)))
+          names(preds$mu_p) <- obj_vars
+
         if(debug_m)
           print(private$tree_sc$classify_inst(instance)$name)
 
