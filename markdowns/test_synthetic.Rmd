@@ -70,10 +70,10 @@ if(mode == 1){
 } else{
   # Single dbn model
   print("Single model training.")
-  tmp <- Sys.time()
-  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25))
-  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
-  print(tmp - Sys.time())
+  # tmp <- Sys.time()
+  # model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25))
+  # model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  # print(tmp - Sys.time())
   
   print("----------------------")
   
@@ -93,8 +93,9 @@ if(mode == 1){
 ini <- 299
 len <- 99
 
-obj_vars <- c("T_1_t_0")
+obj_vars <- c("T_1_t_0", "C_a_t_0")
 ev_vars <- c("C_a_t_0")
+ev_vars <- NULL
 
 print("Forecasting time for single net: ")
 res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)

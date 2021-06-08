@@ -283,6 +283,7 @@ mtDBN <- R6::R6Class("mtDBN",
         # Move predictions into evidence
         if(length(vars_post) > 0)
           instance[, (vars_prev) := .SD, .SDcols = vars_post]
+        instance[, (vars_pred_crop) := preds$mu_p[vars_pred_crop]]
         instance[, (vars_subs_crop) := preds$mu_p[vars_pred_crop]]
         if(!is.null(prov_ev)){
           instance[, (prov_ev_subs) := .SD, .SDcols = prov_ev]
