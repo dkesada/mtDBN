@@ -177,7 +177,7 @@ mtDBN <- R6::R6Class("mtDBN",
       for(i in names(classif)){
         if(!private$homogen)
           network <- dbnR::learn_dbn_struc(NULL, size, method, f_dt = f_dt[classif[, which(.SD == 1), .SDcols = i]], ...)
-        private$models[[i]] <- dbnR::fit_dbn_params(network, f_dt[classif[, which(.SD == 1), .SDcols = i]])
+        private$models[[i]] <- dbnR::fit_dbn_params(network, f_dt[classif[, which(.SD == 1), .SDcols = i]], replace.unidentifiable = T)
       }
     },
 
