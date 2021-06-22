@@ -43,9 +43,9 @@ size <- 2
 id_var <- "cyc"
 
 f_dt_train <- dbnR::filtered_fold_dt(dt_train, size, id_var)
-f_dt_test <- dbnR::filtered_fold_dt(dt_test, size, id_var)
+f_dt_test <- dbnR::filtered_fold_dt(dt_test, size, id_var, clear_id_var = F)
 dt_train[, (id_var) := NULL]
-dt_test[, (id_var) := NULL]
+#dt_test[, (id_var) := NULL]
 ```
 
 Once the dataset is prepared for training, we are ready to fit both the mtDBN and regular DBN models and see how well they perform on synthetic data
@@ -71,7 +71,7 @@ if(mode == 1){
   # Single dbn model
   print("Single model training.")
   tmp <- Sys.time()
-  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25))
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 100, n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), cte=F)
   model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train, replace.unidentifiable = T)
   print(tmp - Sys.time())
   
@@ -81,7 +81,7 @@ if(mode == 1){
   print("mtDBN training.")
   tmp <- Sys.time()
   model <- mtDBN::mtDBN$new()
-  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 6, f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.045)
+  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 10, f_dt = f_dt_train, n_it = 100, n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.007, cte=F)
   print(tmp - Sys.time())
   print("Model training finish.")
   
@@ -96,13 +96,46 @@ len <- 94
 obj_vars <- c("T_1_t_0", "C_a_t_0")
 ev_vars <- c("C_a_t_0")
 ev_vars <- NULL
+f_dt_test_noid <- copy(f_dt_test)[, (id_var) := NULL]
 
 print("Forecasting time for single net: ")
-res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+res_net <- dbnR::forecast_ts(f_dt_test_noid, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
 
 print("----------------------")
 
 print("Forecasting time for mtDBN")
-res <- model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+res <- model$forecast_ts(f_dt_test_noid, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+rm(f_dt_test_noid)
+```
 
+```{r eval_test, eval=FALSE}
+# Duplicated function, just for simplicity
+mae = function(orig, pred){
+  return(sum(abs(orig - pred))/length(orig))
+}
+
+n_cycles <- f_dt_test[, length(unique(get(id_var)))]
+acu_mae_single <- vector(mode = "numeric", length = n_cycles)
+acu_mae_hybrid <- vector(mode = "numeric", length = n_cycles)
+idx <- 1
+obj_vars <- "T_1_t_0"
+ev_vars <- NULL
+
+for(i in f_dt_test[, unique(get(id_var))]){
+  res_single <- dbnR::forecast_ts(f_dt_test[get(id_var) == i, !..id_var], model_fit, size = size, 
+                                  obj_vars = obj_vars, ini = 1, len = len, prov_ev = ev_vars, 
+                                  print_res = F, plot_res = F)
+  res_hibrid <- model$forecast_ts(f_dt_test[get(id_var) == i, !..id_var], obj_vars, 
+                                  ini = 1, len = len, prov_ev = ev_vars, debug_m = F,
+                                  print_res = F, plot_res = F)
+  acu_mae_single[idx] <- mae(res_single$orig[, get(obj_vars)], res_single$pred[, get(obj_vars)])
+  acu_mae_hybrid[idx] <- mae(res_single$orig[, get(obj_vars)], res_hibrid[, get(obj_vars)])
+  idx <- idx + 1
+}
+
+print("MAE for single net:")
+print(paste0(obj_vars, ": ", sum(acu_mae_single)/length(acu_mae_single)))
+print("----------------------")
+print("MAE for mtDBN:")
+print(paste0(obj_vars, ": ", sum(acu_mae_hybrid)/length(acu_mae_hybrid)))
 ```
