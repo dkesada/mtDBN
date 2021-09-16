@@ -310,7 +310,7 @@ The variables that can be manipulated and their range is:
 
 ### Final remarks
 
-Now that all the desired components are in place, the first version of the simulator is finished. It represents a very (very) simplified version of the real problem, where the spatial component is reduced to a single spot, the contact surfaces are all uniform, no turbulences are taken into acount, and so on and so forth. Nonetheless, this simulator is intended to have two main objectives:
+Now that all the desired components are in place, the first version of the simulator is finished. It represents a very (very) simplified version of the real problem, where the spatial component is reduced to a single spot, the contact surfaces are all uniform, no turbulences are taken into account, and so on and so forth. Nonetheless, this simulator is intended to have two main objectives:
 
 * To generate multivariate time-series datasets where one can try to model the original process that generated that data with a time-series model. ALthough the system is very simple, the relationships among the variables in the system are not linear. Given the lack of public multivariate time-series models, this simulator can help testing over synthetic data.
 

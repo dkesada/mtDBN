@@ -1,5 +1,7 @@
 # Utils functions for the physical system of ODEs model
 
+# ICO-Merge fix the grammatical errors and the incomplete descriptions
+
 # Some functions are prepared to be used with the 'deSolve' package or with the
 # 'ode_var_params' wrapper. This functions will be identifiable by having
 # always the parameters 'time', 'y' and 'params' and begining with an

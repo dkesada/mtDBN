@@ -81,7 +81,7 @@ if(mode == 1){
   print("mtDBN training.")
   tmp <- Sys.time()
   model <- mtDBN::mtDBN$new()
-  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 6, f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.045)
+  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 8, f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015)
   print(tmp - Sys.time())
   print("Model training finish.")
   
