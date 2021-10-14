@@ -13,11 +13,11 @@ Imports: dbnR (>= 0.4.5),
   data.table (>= 1.12.4),
   R6 (>= 2.4.1),
   rpart (>= 4.1-15),
-  mvpart (>= 1.6-2),
   bnlearn (>= 4.5)
 Encoding: UTF-8
 RoxygenNote: 7.1.1
 Suggests: 
-    testthat
+  testthat,
+  mvpart (>= 1.6-2),
 Roxygen: list(r6 = TRUE)
 LazyData: true
