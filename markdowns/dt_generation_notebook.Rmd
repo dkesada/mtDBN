@@ -24,7 +24,9 @@ As a first approach, we will try modelling a cycle for some fixed initial values
 ```{r init}
 library(deSolve)
 library(data.table)
-
+if(requireNamespace('plotly', quietly = TRUE))
+  library(plotly)
+  
 source("../R/utils.R")
 ```
 
@@ -43,8 +45,28 @@ times <- seq(0, 99)
 
 res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, params = params)
 
-
-plot(res)
+if(!requireNamespace('plotly', quietly = TRUE)){
+  plot(res)
+} else{
+  s_c <- plot_ly(x = res[,1], y = res[,2], type = 'scatter', mode = 'lines', name = "S_c")
+  c_a <- plot_ly(x = res[,1], y = res[,3], type = 'scatter', mode = 'lines', name = "C_a")
+  t_1 <- plot_ly(x = res[,1], y = res[,4], type = 'scatter', mode = 'lines', name = "T_1")
+  t_2 <- plot_ly(x = res[,1], y = res[,5], type = 'scatter', mode = 'lines', name = "T_2")
+  
+  fig <- subplot(s_c, c_a, t_1, t_2, nrows = 2) %>%
+    layout(plot_bgcolor='#e5ecf6', 
+           xaxis = list( 
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = 'ffff'), 
+           yaxis = list( 
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = 'ffff'),
+           legend = list(font= list(size = 25)))
+  
+  fig
+}
 ```
 
 The aspect of the cycle is similar to what the average cycle is expected to look like. The noise will model the uncertainty that a real system would have. Increasing $m_c$ would increase $T_2$ and $T_1$, but in turn generate a higher value of $S_c$ diminishing the heat transfer between both temperatures and so lowering $T_1$. The 'objective' of a simulation should be to maintain the value of $T_1$ at a certain value without surpassing a limit temperature in $T_2$, which would become impossible at some point due to the insulating factor of $S_c$ and the system should be stopped. That is the original optimization problem behind the simulation, but we will focus on modelling the process itself rather than optimizing the usage of $m_c$. 
