@@ -113,7 +113,7 @@ mtDBN <- R6::R6Class("mtDBN",
     build_tree = function(mv, formula, data, max_depth, prune_val){
       res <- NULL
       if(mv){
-        res <- mvpart::mvpart(form = formula, data = data, method = "anova", control = list(maxdepth = max_depth))
+        res <- mvpart::mvpart(form = formula, data = data, control = list(maxdepth = max_depth))
         res <- mvpart::prune(res, cp = prune_val)
       }
       else{
