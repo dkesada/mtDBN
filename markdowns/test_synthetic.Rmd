@@ -53,11 +53,11 @@ Once the dataset is prepared for training, we are ready to fit both the mtDBN an
 ```{r fit network}
 mode <- 2
 set.seed(42)
-mv <- T
-homogen <- F
+mv <- F
+homogen <- T
 
 if(mv){
-  obj_vars <- c("T_1","C_a")
+  obj_vars <- c("T_1","T_2", "S_c", "C_a", "C_p1", "rho_1")
 }else{
   obj_vars <- "T_1"
 }

@@ -86,3 +86,39 @@ ode_var_params <- function(y, times, foo, params, mu_1 = 0, mu_2 = 0, sigma_1 = 
 
   return(res)
 }
+
+plot_model_change <- function(orig, pred, model_ch){
+  mask <- c(F, sapply(2:length(model_ch), function(x){model_ch[x-1] != model_ch[x]}))
+  mask[!mask] <- mask[!mask] * NA
+  mask <- pred * mask
+  plot(ts(orig))
+  lines(pred, col = "blue")
+  lines(mask, col = "red", type = "dot")
+}
+
+plot_model_change_plotly <- function(orig, pred, model_ch){
+  x_line <- 1:length(orig)
+  mask <- c(F, sapply(2:length(model_ch), function(x){model_ch[x-1] != model_ch[x]}))
+  mask[!mask] <- mask[!mask] * NA
+  mask <- pred * mask
+  fig <- plot_ly(x = x_line, y = orig, type = 'scatter', mode = 'lines+markers', name = "Fluid \ntemperature", 
+                 line = list(color = 'rgba(0, 0, 0, .9)'), marker = list(color = 'rgba(0, 0, 255, 0)'))
+  fig <- fig %>% add_trace(y = pred,  mode = 'lines+markers', name = 'Prediction', 
+                           line = list(color = 'rgba(255, 0, 0, .9)'), marker = list(size = 0)) 
+  fig <- fig %>% add_trace(y = mask, type = 'scatter', mode = 'lines+markers', name = 'Model \nchange',
+                           marker = list(size = 11, color = 'rgba(0, 0, 255, .9)'), line = list(color = 'rgba(0, 0, 255, 0)'))
+  fig <- fig %>% layout(
+                   xaxis = list(
+                     zerolinewidth = 2,
+                     linecolor = 'black',
+                     gridcolor = '5555',
+                     title =  list(text ="Time", font = list(size = 25))),
+                   yaxis = list(
+                     zerolinewidth = 0,
+                     gridcolor = '5555',
+                     title = list(text ="ºC", font = list(size = 25))),
+                   legend = list(font= list(size = 25)))
+  
+  fig
+}
+

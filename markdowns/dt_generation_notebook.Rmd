@@ -48,22 +48,56 @@ res <- ode_var_params(y = y, times = times, foo = coupled_Sc_Ca_t1_t2_t3_vol, pa
 if(!requireNamespace('plotly', quietly = TRUE)){
   plot(res)
 } else{
-  s_c <- plot_ly(x = res[,1], y = res[,2], type = 'scatter', mode = 'lines', name = "S_c")
-  c_a <- plot_ly(x = res[,1], y = res[,3], type = 'scatter', mode = 'lines', name = "C_a")
-  t_1 <- plot_ly(x = res[,1], y = res[,4], type = 'scatter', mode = 'lines', name = "T_1")
-  t_2 <- plot_ly(x = res[,1], y = res[,5], type = 'scatter', mode = 'lines', name = "T_2")
-  
-  fig <- subplot(s_c, c_a, t_1, t_2, nrows = 2) %>%
-    layout(plot_bgcolor='#e5ecf6', 
+  s_c <- plot_ly(x = res[,1], y = res[,2], type = 'scatter', mode = 'lines', name = "S_c")%>%
+    layout(
            xaxis = list( 
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = 'ffff'), 
+             gridcolor = '5555'), 
            yaxis = list( 
+             linecolor = 'black',
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = 'ffff'),
+             gridcolor = '5555'),
            legend = list(font= list(size = 25)))
+  c_a <- plot_ly(x = res[,1], y = res[,3], type = 'scatter', mode = 'lines', name = "C_a")%>%
+    layout(
+           xaxis = list( 
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = '5555'), 
+           yaxis = list( 
+             linecolor = 'black',
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = '5555'),
+           legend = list(font= list(size = 25)))
+  t_1 <- plot_ly(x = res[,1], y = res[,4], type = 'scatter', mode = 'lines', name = "T_1")%>%
+    layout(
+           xaxis = list( 
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = '5555'), 
+           yaxis = list( 
+             linecolor = 'black',
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = '5555'),
+           legend = list(font= list(size = 25)))
+  t_2 <- plot_ly(x = res[,1], y = res[,5], type = 'scatter', mode = 'lines', name = "T_2")%>%
+    layout(
+           xaxis = list( 
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = '5555'), 
+           yaxis = list( 
+             linecolor = 'black',
+             zerolinecolor = '#ffff', 
+             zerolinewidth = 2, 
+             gridcolor = '5555'),
+           legend = list(font= list(size = 25)))
+  
+  fig <- subplot(s_c, c_a, t_1, t_2, nrows = 2) 
   
   fig
 }
