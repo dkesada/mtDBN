@@ -122,3 +122,112 @@ plot_model_change_plotly <- function(orig, pred, model_ch){
   fig
 }
 
+# Create a combination of m disjoint sets of k elements each from the original set n
+# It will only create 1 combination, not all the existing ones like a leave-3-out cross-validation
+cross_sets <- function(n, k){
+  res <- vector(mode = "list", length = floor(length(n) / k))
+  
+  for(i in 1:length(res)){
+    ids <- sample.int(length(n), size = k, replace = F)
+    res[[i]] <- n[ids]
+    n <- n[-ids]
+  }
+  
+  return(res)
+}
+
+# Create the results file by sinking an initial line and the values of the parameters in the elipsis argument
+initialize_results_file <- function(res_file, ...){
+  params <- as.list(substitute(list(...)))
+  sep <- "\n---------------------------------------\n\n"
+  sink(res_file)
+  cat("Beginning the experiment. The parameters are: \n")
+  for(i in 2:length(params)){
+    cat(paste0(names(params)[i], ": ", params[i], "\n"))
+  }
+  cat(sep)
+  sink(NULL)
+}
+
+mae <- function(orig, pred){
+  return(sum(abs(orig-pred)/length(orig)))
+}
+
+forecast_cycle_intervals <- function(f_dt_test, model, id_var, ...){
+  cycles <- f_dt_test[, unique(get(id_var))]
+  reps <- f_dt_test[, ceiling(dim(.SD)[1] / pred_len), by=id_var]$V1
+  res_mae <- vector(mode = "numeric", length=sum(reps))
+  for(i in cycles){
+    ini <- 1
+    # TODO
+  }
+}
+
+launch_single_model <- function(f_dt_train, f_dt_test, obj_vars, method, min_ind, max_depth,
+                                n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs){
+  cat("Single model training:\n")
+  tmp <- Sys.time()
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = method, f_dt = f_dt_train, n_it = n_it,
+                                     n_ind = n_ind, gb_cte = gb_cte, lb_cte = lb_cte, r_probs = r_probs,
+                                     v_probs = v_probs, cte = cte)
+  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  
+  cat(paste0("Elapsed time: ", tmp - Sys.time()))
+  
+  print("Forecasting time for single net: ")
+  res_net <- suppressWarnings(dbnR::forecast_ts(f_dt_test, model_fit, size = size, 
+                                                obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars))
+  
+  cat("\n---------------------------------------\n\n")
+}
+
+launch_hybrid_model <- function(){
+  
+}
+
+train_test_iteration <- function(dt, id_var, test_id, obj_vars, 
+                                 method = "psoho", min_ind = 300, max_depth = 8, n_it = 100,
+                                 n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, cte = F, 
+                                 r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015){
+  
+  res_mae <- vector(mode = "numeric", length = 5)
+  pred_vars <- names(dt_train)[!(names(dt_train) %in% obj_vars)]
+  dt_train <- dt[!(profile_id %in% test_id)]
+  dt_test <- dt[profile_id %in% test_id]
+  
+  f_dt_train <- dbnR::filtered_fold_dt(dt_train, size, id_var)
+  f_dt_test <- dbnR::filtered_fold_dt(dt_test, size, id_var, clear_id_var = F)
+  dt_train[, (id_var) := NULL]
+  #dt_test[, (id_var) := NULL]
+  
+  res_mae[1] <- launch_single_model()
+  res_mae[2] <- launch_hybrid_model()
+  res_mae[3] <- launch_hybrid_model()
+  res_mae[4] <- launch_hybrid_model()
+  res_mae[5] <- launch_hybrid_model()
+  
+  return(res_mae)
+}
+
+full_exp_motor_run <- function(dt, id_var, cross_sets, obj_vars, seed = NULL,
+                               method = "psoho", min_ind = 300, max_depth = 8, n_it = 100,
+                               n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, cte = F, 
+                               r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015,
+                               res_file = "full_run_results.txt"){
+  
+  
+  res_mae <- matrix(nrow = length(cross_sets), ncol = 5)
+  set.seed(seed)
+  
+  initialize_results_file(res_file = "full_run_results.txt", cross_sets, obj_vars, seed,
+                          method, min_ind, max_depth, n_it, n_ind, gb_cte, lb_ct, cte, 
+                          r_probs, v_probs, prune_val)
+  
+  for(i in 1:length(cross_sets)){
+    res_mae[i,] <- train_test_iteration(dt, id_var, cross_sets[[i]], obj_vars, seed, method, min_ind, max_depth, 
+                                        n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs, prune_val)
+    
+  }
+  
+}
+

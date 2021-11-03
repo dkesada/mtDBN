@@ -24,7 +24,8 @@ Test and debug chunks for the mtDBN model.
 * First, model fitting:
 
 ```{r innit}
-dt <- data.table::fread("../dataset/pmsm_temperature_data.csv") # 0.5 secs between rows
+#dt <- data.table::fread("../dataset/pmsm_temperature_data.csv") # 0.5 secs between rows
+dt <- data.table::fread("../dataset/motor_measures_v2.csv") # 0.5 secs between rows
 ```
 
 ```{r dataset_treatment}
@@ -57,7 +58,7 @@ dt_test[, (id_var) := NULL]
 ```{r fit_network}
 mode <- 2
 set.seed(42)
-mv <- F
+mv <- T
 homogen <- T
 
 if(mv){
@@ -75,17 +76,17 @@ if(mode == 1){
   # Single dbn model
   print("Single model training.")
   tmp <- Sys.time()
-  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25))
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train, n_it = 100, n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), cte=F)
   model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
   print(tmp - Sys.time())
 
-  # print("----------------------")
+  print("----------------------")
   
   # mtDBN model
   print("mtDBN training.")
   tmp <- Sys.time()
   model <- mtDBN::mtDBN$new()
-  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 6, f_dt = f_dt_train, n_it = 20, n_ind = 50, gb_cte = 0.5, lb_cte = 0.5, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.003) # 0.045
+  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 8, f_dt = f_dt_train, n_it = 100, n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, cte = F, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015) # 0.045
   print(tmp - Sys.time())
   print("Model training finish.")
   
@@ -96,11 +97,14 @@ if(mode == 1){
 * Second, forecasting 
 
 ```{r forecasting_all}
+
+
 obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
-ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
+#ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
 
 res_uni <- NULL
 res_mtdbn <- NULL
+
 
 sink("fore_results.txt")
 
@@ -145,19 +149,20 @@ print(res)
 
 ```{r forecasting, eval=FALSE}
 ini <- 301
-len <- 400
+len <- 20
 
 
 obj_vars <- c("pm_t_0", "stator_tooth_t_0", "stator_winding_t_0", "stator_yoke_t_0")
-ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
+#ev_vars <- c("ambient_t_0","coolant_t_0","u_d_t_0","u_q_t_0","motor_speed_t_0","i_d_t_0","i_q_t_0")
+ev_vars <- c("motor_speed_t_0","i_d_t_0")
 
 print("Forecasting time for single net: ")
-res_net <- dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+res_net <- suppressWarnings(dbnR::forecast_ts(f_dt_test, model_fit, size = size, obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars))
 
 print("----------------------")
 
 print("Forecasting time for mtDBN")
-res <- model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars)
+res <- suppressWarnings(model$forecast_ts(f_dt_test, obj_vars, ini = ini, len = len, prov_ev = ev_vars))
 
 ```
 
