@@ -138,96 +138,152 @@ cross_sets <- function(n, k){
 
 # Create the results file by sinking an initial line and the values of the parameters in the elipsis argument
 initialize_results_file <- function(res_file, ...){
-  params <- as.list(substitute(list(...)))
+  params <- list(...)
+  param_names <- as.list(substitute(list(...)))[-1L]
   sep <- "\n---------------------------------------\n\n"
   sink(res_file)
   cat("Beginning the experiment. The parameters are: \n")
   for(i in 2:length(params)){
-    cat(paste0(names(params)[i], ": ", params[i], "\n"))
+    cat(paste0(param_names[i], ": ", params[[i]], "\n"))
   }
   cat(sep)
-  sink(NULL)
+  sink()
+}
+
+print_current_results <- function(res_file, res_matrix, it){
+  sep <- "\n---------------------------------------\n\n"
+  sink(res_file, append = T)
+  if(it == -1){ # Final results
+    cat("The final results of the experiment are: \n")
+    print(res_matrix)
+  }
+  else{ 
+    cat(paste0("The results of fold number ", it, " are: \n"))
+    print(res_matrix)
+    cat(sep)
+  }
+  
+  sink()
 }
 
 mae <- function(orig, pred){
   return(sum(abs(orig-pred)/length(orig)))
 }
 
-forecast_cycle_intervals <- function(f_dt_test, model, id_var, ...){
+forecast_cycle_intervals_single <- function(f_dt_test, model, id_var, obj_vars, pred_len){
   cycles <- f_dt_test[, unique(get(id_var))]
   reps <- f_dt_test[, ceiling(dim(.SD)[1] / pred_len), by=id_var]$V1
-  res_mae <- vector(mode = "numeric", length=sum(reps))
-  for(i in cycles){
+  res_matrix <- matrix(nrow = sum(reps), ncol = 2)
+  global_rep <- 1
+  
+  for(i in 1:length(cycles)){
     ini <- 1
-    # TODO
+    din_pred_len <- pred_len
+    for(j in 1:reps[i]){
+      if(ini + din_pred_len > dim(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F])[1]) # Last iteration of each cycle is probably smaller
+        din_pred_len <- dim(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F])[1] - ini + 1
+      span <- Sys.time()
+      res_cycle <- suppressWarnings(dbnR::forecast_ts(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F],
+                                                      model_fit, size = size, obj_vars = obj_vars, 
+                                                      ini = ini, len = din_pred_len, prov_ev = ev_vars,
+                                                      print_res = F, plot_res = F))
+      res_matrix[global_rep, 2] <- span - Sys.time()
+      res_matrix[global_rep, 1] <- mae(res_cycle$orig[,get(obj_vars)], res_cycle$pred[,get(obj_vars)])
+      global_rep <- global_rep + 1
+      ini <- ini + din_pred_len
+    }
   }
+  
+  return(apply(res_matrix, 2, mean))
 }
 
-launch_single_model <- function(f_dt_train, f_dt_test, obj_vars, method, min_ind, max_depth,
+launch_single_model <- function(f_dt_train, f_dt_test, id_var, obj_vars, pred_len, method, min_ind, max_depth,
                                 n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs){
-  cat("Single model training:\n")
-  tmp <- Sys.time()
+  res_matrix <- matrix(nrow = 1, ncol = 3)
+  span <- Sys.time() # Size were? TODO
   model_net <- dbnR::learn_dbn_struc(dt_train, size, method = method, f_dt = f_dt_train, n_it = n_it,
                                      n_ind = n_ind, gb_cte = gb_cte, lb_cte = lb_cte, r_probs = r_probs,
                                      v_probs = v_probs, cte = cte)
   model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  res_matrix[1,3] <- span - Sys.time()
+  res_matrix[1,1:2] <- forecast_cycle_intervals_single(f_dt_test, model_fit, id_var, obj_vars, pred_len)
   
-  cat(paste0("Elapsed time: ", tmp - Sys.time()))
-  
-  print("Forecasting time for single net: ")
-  res_net <- suppressWarnings(dbnR::forecast_ts(f_dt_test, model_fit, size = size, 
-                                                obj_vars = obj_vars, ini = ini, len = len, prov_ev = ev_vars))
-  
-  cat("\n---------------------------------------\n\n")
+  return(res_matrix)
 }
 
-launch_hybrid_model <- function(){
+launch_hybrid_model <- function(f_dt_train, f_dt_test, id_var, obj_vars, mv, homogen, pred_len, method, min_ind, max_depth,
+                                n_it, n_ind, gb_cte, lb_cte, r_probs, v_probs, prune_val){
+  res_matrix <- matrix(nrow = 1, ncol = 3)
+  span <- Sys.time()
+  model <- mtDBN::mtDBN$new()
+  model$fit_model(dt_train, size, method = method, obj_var = obj_vars, mv = mv, homogen = homogen, 
+                  min_ind = min_ind, max_depth = max_depth, f_dt = f_dt_train, n_it = n_it, n_ind = n_ind, gb_cte = gb_cte, 
+                  lb_cte = lb_cte, cte = cte, r_probs = r_probs, v_probs = v_probs, prune_val = prune_val)
+  res_matrix[1,3] <- span - Sys.time()
+  res_matrix[1,1:2] <- forecast_cycle_intervals_single(f_dt_test, model, id_var, obj_vars, pred_len)
   
+  return(res_matrix)
 }
 
 train_test_iteration <- function(dt, id_var, test_id, obj_vars, 
                                  method = "psoho", min_ind = 300, max_depth = 8, n_it = 100,
                                  n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, cte = F, 
-                                 r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015){
+                                 r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015, pred_len = 20){
   
-  res_mae <- vector(mode = "numeric", length = 5)
+  res_matrix <- matrix(nrow = 5, ncol = 3)
+  colnames(res_matrix) <- c("MAE", "exec_time", "train_time")
   pred_vars <- names(dt_train)[!(names(dt_train) %in% obj_vars)]
   dt_train <- dt[!(profile_id %in% test_id)]
   dt_test <- dt[profile_id %in% test_id]
   
   f_dt_train <- dbnR::filtered_fold_dt(dt_train, size, id_var)
   f_dt_test <- dbnR::filtered_fold_dt(dt_test, size, id_var, clear_id_var = F)
-  dt_train[, (id_var) := NULL]
-  #dt_test[, (id_var) := NULL]
   
-  res_mae[1] <- launch_single_model()
-  res_mae[2] <- launch_hybrid_model()
-  res_mae[3] <- launch_hybrid_model()
-  res_mae[4] <- launch_hybrid_model()
-  res_mae[5] <- launch_hybrid_model()
+  res_matrix[1,] <- launch_single_model(f_dt_train, f_dt_test, id_var, obj_vars, pred_len, method, min_ind, max_depth,
+                                    n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs)
+  # res_matrix[2,] <- launch_hybrid_model()
+  # res_matrix[3,] <- launch_hybrid_model()
+  # res_matrix[4,] <- launch_hybrid_model()
+  # res_matrix[5,] <- launch_hybrid_model()
   
-  return(res_mae)
+  return(res_matrix)
 }
 
-full_exp_motor_run <- function(dt, id_var, cross_sets, obj_vars, seed = NULL,
+
+
+full_exp_motor_run <- function(dt, id_var, obj_vars, seed = NULL,
                                method = "psoho", min_ind = 300, max_depth = 8, n_it = 100,
                                n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, cte = F, 
-                               r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015,
-                               res_file = "full_run_results.txt"){
+                               r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015, pred_len = 20,
+                               fold_len = 3, res_file = "full_run_results.txt"){
   
-  
-  res_mae <- matrix(nrow = length(cross_sets), ncol = 5)
+  res_matrix <- matrix(nrow = 5, ncol = 3, 0) # 5 different models, 3 columns: MAE, exec_time and train_time
   set.seed(seed)
+  cv_sets <- cross_sets(dt[, unique(get(id_var))], fold_len)
   
-  initialize_results_file(res_file = "full_run_results.txt", cross_sets, obj_vars, seed,
-                          method, min_ind, max_depth, n_it, n_ind, gb_cte, lb_ct, cte, 
+  initialize_results_file(res_file, cv_sets, obj_vars, seed,
+                          method, min_ind, max_depth, n_it, n_ind, gb_cte, lb_cte, cte, 
                           r_probs, v_probs, prune_val)
   
-  for(i in 1:length(cross_sets)){
-    res_mae[i,] <- train_test_iteration(dt, id_var, cross_sets[[i]], obj_vars, seed, method, min_ind, max_depth, 
-                                        n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs, prune_val)
-    
+  for(i in 1:length(cv_sets)){
+    message(paste0("Currently on the fold number ", i, " out of ", length(cv_sets)))
+    res_tmp <- train_test_iteration(dt, id_var, cv_sets[[i]], obj_vars, method, min_ind, max_depth, 
+                                              n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs, prune_val, pred_len)
+    print_current_results(res_file, res_tmp, i)
+    res_matrix <- res_matrix + res_tmp
   }
   
+  res_matrix <- res_matrix / length(cv_sets)
+  print_current_results(res_matrix, -1)
 }
 
+main_prep_and_run <- function(){
+  dt <- data.table::fread("./dataset/motor_measures_v2.csv") # 0.5 secs between rows
+  size <- 3
+  id_var <- "profile_id"
+  
+  dt[, torque := NULL]
+  dt <- dbnR::reduce_freq(dt, 30, 0.5, id_var) # 30 secs between rows
+  obj_vars <- "pm_t_0"
+  full_exp_motor_run(dt, id_var, obj_vars, seed = 42, n_it = 2)
+}
