@@ -306,7 +306,7 @@ full_exp_motor_run <- function(dt, id_var, obj_vars, seed = NULL,
   }
   
   res_matrix <- res_matrix / length(cv_sets)
-  print_current_results(res_matrix, -1)
+  print_current_results(res_file, res_matrix, -1)
 }
 
 main_prep_and_run <- function(){
@@ -317,5 +317,28 @@ main_prep_and_run <- function(){
   dt[, torque := NULL]
   dt <- dbnR::reduce_freq(dt, 30, 0.5, id_var) # 30 secs between rows
   obj_vars <- "pm_t_0"
-  full_exp_motor_run(dt, id_var, obj_vars, seed = 42, n_it = 2)
+  full_exp_motor_run(dt, id_var, obj_vars, seed = 42, n_it = 100)
+}
+
+# In case the total results are for some reason not saved in the results file, this function recovers 
+# the intermediate tables and aggregates them to obtain the final results
+recover_results <- function(){
+  res_matrix <- matrix(nrow = 5, ncol = 3, 0)
+  n_hits <- 0
+  regex <- "^[[:punct:][:digit:][:punct:][:punct:]]+ +[[:digit:]|[:punct:]]+ +[[:digit:]|[:punct:]]+ +[[:digit:]|[:punct:]]+$"
+  
+  for(line in readLines("full_run_results.txt")){
+    if(length(grep(regex, line))){ # If it's a row of a intermediate matrix
+      n_hits <- n_hits + 1
+      if(n_hits %% 5 == 0)
+        res_matrix[5,] <- res_matrix[5,] + as.numeric(strsplit(line," +")[[1]][2:4])
+      else
+        res_matrix[n_hits%%5,] <- res_matrix[n_hits%%5,] + as.numeric(strsplit(line," +")[[1]][2:4])
+    }
+  }
+  
+  res_matrix <- res_matrix / (n_hits / 5)
+  print(res_matrix)
+  
+  return(res_matrix)
 }
