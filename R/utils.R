@@ -112,12 +112,14 @@ plot_model_change_plotly <- function(orig, pred, model_ch){
                      zerolinewidth = 2,
                      linecolor = 'black',
                      gridcolor = '5555',
-                     title =  list(text ="Time", font = list(size = 25))),
+                     title =  list(text ="Time", font = list(size = 30)),
+                     tickfont = list(size = 25)),
                    yaxis = list(
                      zerolinewidth = 0,
                      gridcolor = '5555',
-                     title = list(text ="ºC", font = list(size = 25))),
-                   legend = list(font= list(size = 25)))
+                     title = list(text ="ºC", font = list(size = 30)),
+                     tickfont = list(size = 25)),
+                   legend = list(font= list(size = 30)))
   
   fig
 }

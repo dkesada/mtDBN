@@ -57,8 +57,8 @@ mtDBN <- R6::R6Class("mtDBN",
       }
 
       # TODO: allow filename argument, check if ps2pdf is available, check if linux
-
-      rpart::post(private$rtree, width, height, paper, horizontal, filename = "rtree.ps")
+      # ICO-Merge: remove the call to system. There's no way that's fine when merging with dbnR or when uploading to CRAN
+      rpart::post(private$tree_sc$get_rtree(), width, height, paper, horizontal, filename = "rtree.ps")
       system("ps2pdf -dDEVICEWIDTHPOINTS=1479 -dDEVICEHEIGHTPOINTS=1598 rtree.ps rtree.pdf")
       system("rm rtree.ps")
 
