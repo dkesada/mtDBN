@@ -102,25 +102,37 @@ mtDBN <- R6::R6Class("mtDBN",
     },
 
     #' @description
-    #' Builds and prunes an univariate or multivariate tree.
+    #' Builds an univariate or multivariate tree.
     #' @param mv if TRUE, a multivariate tree will be made. If FALSE, it will be univariate
     #' @param formula the formula fo the regression tree
     #' @param data the training dataset
     #' @param method the tree building method
     #' @param max_depth maximum depth of the tree
-    #' @param prune_val complexity parameter for the rpart prune function
     #' @return the generated tree
-    build_tree = function(mv, formula, data, max_depth, prune_val){
+    build_tree = function(mv, formula, data, max_depth){
       res <- NULL
-      if(mv){
+      if(mv)
         res <- mvpart::mvpart(form = formula, data = data, control = list(maxdepth = max_depth))
-        res <- mvpart::prune(res, cp = prune_val)
-      }
-      else{
+        
+      else
         res <- rpart::rpart(formula = formula, data = data, method = "anova", control = list(maxdepth = max_depth))
-        res <- rpart::prune(res, cp = prune_val)
-      }
 
+      return(res)
+    },
+    
+    #' @description
+    #' Prunes an univariate or multivariate tree.
+    #' @param full_tree fully grown tree
+    #' @param mv if TRUE, a multivariate tree will be made. If FALSE, it will be univariate
+    #' @param prune_val complexity parameter for the rpart prune function
+    #' @return the pruned tree
+    prune_tree = function(full_tree, mv, prune_val){
+      res <- NULL
+      if(mv)
+        res <- mvpart::prune(full_tree, cp = prune_val)
+      else
+        res <- rpart::prune(full_tree, cp = prune_val)
+      
       return(res)
     },
 
@@ -139,17 +151,17 @@ mtDBN <- R6::R6Class("mtDBN",
       pred_vars <- names(dt_t_0)
       obj_var <- paste0(obj_var, "_t_0")
       pred_vars <- pred_vars[!(pred_vars %in% obj_var)]
-
+      browser()
       valid <- F
+      full_tree <- private$build_tree(mv, formula = private$formulate(obj_var, pred_vars),
+                                data = dt_t_0, max_depth = max_depth)
       while (!valid) {
-        res <- private$build_tree(mv, formula = private$formulate(obj_var, pred_vars),
-                                  data = dt_t_0, max_depth = max_depth, prune_val = prune_val)
-
-        valid <- min_ind <= min(res$frame$n)
+        pruned_tree <- private$prune_tree(full_tree, mv, prune_val)
+        valid <- min_ind <= min(pruned_tree$frame$n)
         prune_val <- prune_val + inc
       }
 
-      private$tree_sc <- treeSc$new(res)
+      private$tree_sc <- treeSc$new(pruned_tree)
 
     },
 

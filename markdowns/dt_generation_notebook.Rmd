@@ -53,49 +53,57 @@ if(!requireNamespace('plotly', quietly = TRUE)){
            xaxis = list( 
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'), 
+             gridcolor = '5555',
+             tickfont = list(size = 25)), 
            yaxis = list( 
              linecolor = 'black',
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'),
-           legend = list(font= list(size = 25)))
+             gridcolor = '5555',
+             tickfont = list(size = 25)),
+           legend = list(font= list(size = 30)))
   c_a <- plot_ly(x = res[,1], y = res[,3], type = 'scatter', mode = 'lines', name = "C_a")%>%
     layout(
            xaxis = list( 
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'), 
+             gridcolor = '5555',
+             tickfont = list(size = 25)), 
            yaxis = list( 
              linecolor = 'black',
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'),
-           legend = list(font= list(size = 25)))
+             gridcolor = '5555',
+             tickfont = list(size = 25)),
+           legend = list(font= list(size = 30)))
   t_1 <- plot_ly(x = res[,1], y = res[,4], type = 'scatter', mode = 'lines', name = "T_1")%>%
     layout(
            xaxis = list( 
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'), 
+             gridcolor = '5555',
+             tickfont = list(size = 25)), 
            yaxis = list( 
              linecolor = 'black',
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'),
-           legend = list(font= list(size = 25)))
+             gridcolor = '5555',
+             tickfont = list(size = 25)),
+           legend = list(font= list(size = 30)))
   t_2 <- plot_ly(x = res[,1], y = res[,5], type = 'scatter', mode = 'lines', name = "T_2")%>%
     layout(
            xaxis = list( 
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'), 
+             gridcolor = '5555',
+             tickfont = list(size = 25)), 
            yaxis = list( 
              linecolor = 'black',
              zerolinecolor = '#ffff', 
              zerolinewidth = 2, 
-             gridcolor = '5555'),
-           legend = list(font= list(size = 25)))
+             gridcolor = '5555',
+             tickfont = list(size = 25)),
+           legend = list(font= list(size = 30)))
   
   fig <- subplot(s_c, c_a, t_1, t_2, nrows = 2) 
   

@@ -66,7 +66,7 @@ if(mode == 1){ # Debug and testing
   #model_net <- dbnR::learn_dbn_struc(dt_train, size, method = "psoho", f_dt = f_dt_train)
   #model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
   model <- mtDBN::mtDBN$new()
-  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 6, f_dt = f_dt_train, prune_val = 0.045, n_ind = 10, n_it = 10)
+  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 6, f_dt = f_dt_train, prune_val = 0.045, n_ind = 10, n_it = 100)
 } else{
   # Single dbn model
   print("Single model training.")
@@ -81,7 +81,7 @@ if(mode == 1){ # Debug and testing
   print("mtDBN training.")
   tmp <- Sys.time()
   model <- mtDBN::mtDBN$new()
-  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 8, f_dt = f_dt_train, n_it = 100, n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015)
+  model$fit_model(dt_train, size, method = "psoho", obj_var = obj_vars, mv = mv, homogen = homogen, min_ind = 300, max_depth = 8, f_dt = f_dt_train, n_it = 10, n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015)
 
   print(tmp - Sys.time())
   print("Model training finish.")
