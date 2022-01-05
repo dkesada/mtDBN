@@ -15,7 +15,7 @@ Imports: dbnR (>= 0.4.5),
   rpart (>= 4.1-15),
   bnlearn (>= 4.5)
 Encoding: UTF-8
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 Suggests: 
   testthat,
   mvpart (>= 1.6-2),

@@ -113,13 +113,13 @@ mtDBN <- R6::R6Class("mtDBN",
       res <- NULL
       if(mv)
         res <- mvpart::mvpart(form = formula, data = data, control = list(maxdepth = max_depth))
-        
+
       else
         res <- rpart::rpart(formula = formula, data = data, method = "anova", control = list(maxdepth = max_depth))
 
       return(res)
     },
-    
+
     #' @description
     #' Prunes an univariate or multivariate tree.
     #' @param full_tree fully grown tree
@@ -132,7 +132,7 @@ mtDBN <- R6::R6Class("mtDBN",
         res <- mvpart::prune(full_tree, cp = prune_val)
       else
         res <- rpart::prune(full_tree, cp = prune_val)
-      
+
       return(res)
     },
 
@@ -151,7 +151,6 @@ mtDBN <- R6::R6Class("mtDBN",
       pred_vars <- names(dt_t_0)
       obj_var <- paste0(obj_var, "_t_0")
       pred_vars <- pred_vars[!(pred_vars %in% obj_var)]
-      browser()
       valid <- F
       full_tree <- private$build_tree(mv, formula = private$formulate(obj_var, pred_vars),
                                 data = dt_t_0, max_depth = max_depth)
@@ -206,7 +205,7 @@ mtDBN <- R6::R6Class("mtDBN",
       if(length(evidence) == 0)
         evidence <- attr(fit,"mu")[bnlearn::root.nodes(fit)]
 
-      res <- mvn_inference(attr(fit,"mu"), attr(fit,"sigma"), evidence)
+      res <- dbnR::mvn_inference(attr(fit,"mu"), attr(fit,"sigma"), evidence)
       res$mu_p <- as.list(res$mu_p[,1])
 
       return(res)
@@ -270,7 +269,7 @@ mtDBN <- R6::R6Class("mtDBN",
       var_names <- names(instance)
       vars_pred_idx <- grep("t_0", var_names)
       vars_subs_idx <- grep("t_1", var_names)
-      vars_last_idx <- grep(paste0("t_", size-1), var_names)
+      vars_last_idx <- grep(paste0("t_", private$size-1), var_names)
       vars_pred <- var_names[vars_pred_idx]
       vars_prev <- var_names[-c(vars_pred_idx, vars_subs_idx)]
       vars_post <- var_names[-c(vars_pred_idx, vars_last_idx)]
