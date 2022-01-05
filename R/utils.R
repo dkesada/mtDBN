@@ -171,3 +171,193 @@ print_current_results <- function(res_file, res_matrix, it){
 mae <- function(orig, pred){
   return(sum(abs(orig-pred)/length(orig)))
 }
+
+# Experiment pipeline functions
+
+forecast_cycle_intervals_single <- function(f_dt_test, model_fit, id_var, size, obj_vars, pred_len){
+  cycles <- f_dt_test[, unique(get(id_var))]
+  reps <- f_dt_test[, ceiling(dim(.SD)[1] / pred_len), by=id_var]$V1
+  res_matrix <- matrix(nrow = sum(reps), ncol = 2)
+  global_rep <- 1
+
+  for(i in 1:length(cycles)){
+    ini <- 1
+    din_pred_len <- pred_len
+    for(j in 1:reps[i]){
+      if(ini + din_pred_len > dim(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F])[1]) # Last iteration of each cycle is probably smaller
+        din_pred_len <- dim(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F])[1] - ini + 1
+      span <- Sys.time()
+      res_cycle <- suppressWarnings(dbnR::forecast_ts(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F],
+                                                      model_fit, size = size, obj_vars = obj_vars,
+                                                      ini = ini, len = din_pred_len, prov_ev = NULL,
+                                                      print_res = F, plot_res = F))
+      res_matrix[global_rep, 2] <- span - Sys.time()
+      res_matrix[global_rep, 1] <- mae(res_cycle$orig[,get(obj_vars)], res_cycle$pred[,get(obj_vars)])
+      global_rep <- global_rep + 1
+      ini <- ini + din_pred_len
+    }
+  }
+
+  return(list(mean_res = apply(res_matrix, 2, mean), mae = res_matrix[,1]))
+}
+
+launch_single_model <- function(dt_train, f_dt_train, f_dt_test, id_var, obj_vars,
+                                pred_len, size, method, min_ind, max_depth,
+                                n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs){
+  res_matrix <- matrix(nrow = 1, ncol = 3)
+  span <- Sys.time() # Size were? TODO
+  model_net <- dbnR::learn_dbn_struc(dt_train, size, method = method, f_dt = f_dt_train, n_it = n_it,
+                                     n_ind = n_ind, gb_cte = gb_cte, lb_cte = lb_cte, r_probs = r_probs,
+                                     v_probs = v_probs, cte = cte)
+  model_fit <- dbnR::fit_dbn_params(model_net, f_dt_train)
+  res_matrix[1,3] <- span - Sys.time()
+  fore_results <- forecast_cycle_intervals_single(f_dt_test, model_fit, id_var, size, obj_vars, pred_len)
+  res_matrix[1,1:2] <- fore_results$mean_res
+
+  return(list(mean_res = res_matrix, mae = fore_results$mae))
+}
+
+forecast_cycle_intervals_hybrid <- function(f_dt_test, model, id_var, obj_vars, pred_len){
+  cycles <- f_dt_test[, unique(get(id_var))]
+  reps <- f_dt_test[, ceiling(dim(.SD)[1] / pred_len), by=id_var]$V1
+  res_matrix <- matrix(nrow = sum(reps), ncol = 2)
+  global_rep <- 1
+
+  for(i in 1:length(cycles)){
+    ini <- 1
+    din_pred_len <- pred_len
+    for(j in 1:reps[i]){
+      if(ini + din_pred_len > dim(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F])[1]) # Last iteration of each cycle is probably smaller
+        din_pred_len <- dim(f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F])[1] - ini + 1
+      span <- Sys.time()
+      orig <- f_dt_test[get(id_var) == cycles[i], !eval(id_var), with=F]
+      res_cycle <- suppressWarnings(model$forecast_ts(orig, obj_vars = obj_vars, ini = ini, len = din_pred_len,
+                                                      prov_ev = NULL, print_res = F, plot_res = F, debug_m = F))
+      res_matrix[global_rep, 2] <- span - Sys.time()
+      res_matrix[global_rep, 1] <- mae(orig[ini:(ini+din_pred_len-1),get(obj_vars)], res_cycle[,get(obj_vars)])
+      global_rep <- global_rep + 1
+      ini <- ini + din_pred_len
+    }
+  }
+
+  return(list(mean_res = apply(res_matrix, 2, mean), mae = res_matrix[,1]))
+}
+
+launch_hybrid_model <- function(dt_train, f_dt_train, f_dt_test, id_var,
+                                obj_vars, obj_vars_tree, mv, homogen, pred_len, size, method,
+                                min_ind, max_depth, n_it, n_ind, gb_cte, lb_cte,
+                                cte, r_probs, v_probs, prune_val){
+  res_matrix <- matrix(nrow = 1, ncol = 3)
+  train_obj_vars <- sapply(obj_vars_tree, function(x){strsplit(x, "_t_0")[[1]]}, USE.NAMES = F)
+  span <- Sys.time()
+  model <- mtDBN::mtDBN$new()
+  model$fit_model(dt_train, size, method = method, obj_var = train_obj_vars, mv = mv, homogen = homogen,
+                  min_ind = min_ind, max_depth = max_depth, f_dt = f_dt_train, n_it = n_it, n_ind = n_ind, gb_cte = gb_cte,
+                  lb_cte = lb_cte, cte = cte, r_probs = r_probs, v_probs = v_probs, prune_val = prune_val)
+  res_matrix[1,3] <- span - Sys.time()
+  fore_results <- forecast_cycle_intervals_hybrid(f_dt_test, model, id_var, obj_vars, pred_len)
+  res_matrix[1,1:2] <- fore_results$mean_res
+
+  return(list(mean_res = res_matrix, mae = fore_results$mae))
+}
+
+train_test_iteration <- function(dt, id_var, test_id, obj_vars, obj_var_univ, obj_var_multiv, size = 3,
+                                 method = "psoho", min_ind = 300, max_depth = 8, n_it = 100,
+                                 n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, cte = F,
+                                 r_probs = c(-0.5, 1.5), v_probs = c(10,65,25), prune_val = 0.015, pred_len = 20){
+
+  res_matrix <- matrix(nrow = 5, ncol = 3)
+  colnames(res_matrix) <- c("MAE", "exec_time", "train_time")
+  dt_train <- dt[!(get(id_var) %in% test_id)]
+  dt_test <- dt[get(id_var) %in% test_id]
+
+  f_dt_train <- dbnR::filtered_fold_dt(dt_train, size, id_var)
+  dt_train[, eval(id_var) := NULL]
+  f_dt_test <- dbnR::filtered_fold_dt(dt_test, size, id_var, clear_id_var = F)
+  res_mae <- matrix(nrow = sum(f_dt_test[, ceiling(dim(.SD)[1] / pred_len), by=id_var]$V1), ncol = 5) # We have to calculate the total number of reps to know the rows
+
+  res_tmp <- launch_single_model(dt_train, f_dt_train, f_dt_test, id_var, obj_vars, pred_len, size, method, min_ind, max_depth,
+                                 n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs)
+  res_matrix[1,] <- res_tmp$mean_res
+  res_mae[,1] <- res_tmp$mae
+
+  res_tmp <- launch_hybrid_model(dt_train, f_dt_train, f_dt_test, id_var, obj_vars, obj_var_univ, F, T, pred_len, size, method,
+                                 min_ind, max_depth, n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs, prune_val)
+  res_matrix[2,] <- res_tmp$mean_res
+  res_mae[,2] <- res_tmp$mae
+
+  res_tmp <- launch_hybrid_model(dt_train, f_dt_train, f_dt_test, id_var, obj_vars, obj_var_multiv, T, T, pred_len, size, method,
+                                 min_ind, max_depth, n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs, prune_val)
+  res_matrix[3,] <- res_tmp$mean_res
+  res_mae[,3] <- res_tmp$mae
+
+  res_tmp <- launch_hybrid_model(dt_train, f_dt_train, f_dt_test, id_var, obj_vars, obj_var_univ, F, F, pred_len, size, method,
+                                 min_ind, max_depth, n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs, prune_val)
+  res_matrix[4,] <- res_tmp$mean_res
+  res_mae[,4] <- res_tmp$mae
+
+  res_tmp <- launch_hybrid_model(dt_train, f_dt_train, f_dt_test, id_var, obj_vars, obj_var_multiv, T, F, pred_len, size, method,
+                                 min_ind, max_depth, n_it, n_ind, gb_cte, lb_cte, cte, r_probs, v_probs, prune_val)
+  res_matrix[5,] <- res_tmp$mean_res
+  res_mae[,5] <- res_tmp$mae
+
+  return(list(mean_res = res_matrix, mae = res_mae))
+}
+
+full_exp_run <- function(dt, id_var, obj_vars, obj_var_univ, obj_var_multiv,
+                         res_file, mae_file, pred_len, fold_len,
+                         seed = NULL, size = 2, method = "psoho",
+                         min_ind = 300, max_depth = 8, n_it = 100,
+                         n_ind = 100, gb_cte = 0.3, lb_cte = 0.7, cte = F,
+                         r_probs = c(-0.5, 1.5), v_probs = c(10,65,25),
+                         prune_val = 0.015){
+
+  res_matrix <- matrix(nrow = 5, ncol = 3, 0) # 5 different models, 3 columns: MAE, exec_time and train_time
+  set.seed(seed)
+  cv_sets <- cross_sets(dt[, unique(get(id_var))], fold_len)
+  res_mae <- matrix(nrow = 0, ncol = 5) # I cannot know how many rows do I need without folding the test dataset and counting the number of needed repetitions, so I'll rbind
+  colnames(res_mae) <- c("baseline", "m1", "m2", "m3", "m4")
+
+  initialize_results_file(res_file, cv_sets, obj_vars, obj_var_univ, obj_var_multiv, seed,
+                          size, method, min_ind, max_depth, n_it, n_ind, gb_cte,
+                          lb_cte, cte, r_probs, v_probs, prune_val)
+
+  for(i in 1:length(cv_sets)){
+    message(paste0("Currently on the fold number ", i, " out of ", length(cv_sets)))
+    res_tmp <- train_test_iteration(dt, id_var, cv_sets[[i]], obj_vars, obj_var_univ,
+                                    obj_var_multiv, size, method, min_ind, max_depth,
+                                    n_it, n_ind, gb_cte, lb_cte, cte, r_probs,
+                                    v_probs, prune_val, pred_len)
+    print_current_results(res_file, res_tmp$mean_res, i)
+    res_matrix <- res_matrix + res_tmp$mean_res
+    res_mae <- rbind(res_mae, res_tmp$mae)
+    browser()
+  }
+
+  fwrite(as.data.table(res_mae), file = mae_file)
+  res_matrix <- res_matrix / length(cv_sets)
+  print_current_results(res_file, res_matrix, -1)
+}
+
+# In case the total results are for some reason not saved in the results file, this function recovers
+# the intermediate tables and aggregates them to obtain the final results
+recover_results <- function(){
+  res_matrix <- matrix(nrow = 5, ncol = 3, 0)
+  n_hits <- 0
+  regex <- "^[[:punct:][:digit:][:punct:][:punct:]]+ +[[:digit:]|[:punct:]]+ +[[:digit:]|[:punct:]]+ +[[:digit:]|[:punct:]]+$"
+
+  for(line in readLines("full_run_results.txt")){
+    if(length(grep(regex, line))){ # If it's a row of a intermediate matrix
+      n_hits <- n_hits + 1
+      if(n_hits %% 5 == 0)
+        res_matrix[5,] <- res_matrix[5,] + as.numeric(strsplit(line," +")[[1]][2:4])
+      else
+        res_matrix[n_hits%%5,] <- res_matrix[n_hits%%5,] + as.numeric(strsplit(line," +")[[1]][2:4])
+    }
+  }
+
+  res_matrix <- res_matrix / (n_hits / 5)
+  print(res_matrix)
+
+  return(res_matrix)
+}
