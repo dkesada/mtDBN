@@ -124,6 +124,53 @@ plot_model_change_plotly <- function(orig, pred, model_ch){
   fig
 }
 
+plot_two_cycles_plotly <- function(dt, id_var="profile_id", obj_var="pm", y1_id=12, y2_id=10, freq=0.5){
+  y1 <- dt[get(id_var) == y1_id, get(obj_var)]
+  x1 <- (1:length(y1))*freq
+  y2 <- dt[get(id_var) == y2_id, get(obj_var)]
+  x2 <- (1:length(y2))*freq
+
+  y1_fig <- plot_ly(x = x1, y = y1, type = 'scatter', mode = 'lines', line=list(color='black'), name = paste0("Session ", y1_id))%>%
+    layout(
+      xaxis = list(
+        zerolinecolor = '#ffff',
+        zerolinewidth = 2,
+        linecolor = 'black',
+        gridcolor = '5555',
+        title =  list(text ="Time", font = list(size = 30)),
+        tickfont = list(size = 25)),
+      yaxis = list(
+        linecolor = 'black',
+        zerolinecolor = '#ffff',
+        zerolinewidth = 2,
+        gridcolor = '5555',
+        title = list(text ="ºC", font = list(size = 30)),
+        tickfont = list(size = 25)),
+      legend = list(font= list(size = 30)))
+
+  y2_fig <- plot_ly(x = x2, y = y2, type = 'scatter', mode = 'lines', line=list(color='black'), name = paste0("Session ", y2_id))%>%
+    layout(
+      xaxis = list(
+        zerolinecolor = '#ffff',
+        zerolinewidth = 2,
+        linecolor = 'black',
+        gridcolor = '5555',
+        title =  list(text ="Time", font = list(size = 30)),
+        tickfont = list(size = 25)),
+      yaxis = list(
+        linecolor = 'black',
+        zerolinecolor = '#ffff',
+        zerolinewidth = 2,
+        gridcolor = '5555',
+        title = list(text ="ºC", font = list(size = 30)),
+        tickfont = list(size = 25)),
+      legend = list(font= list(size = 30)))
+
+
+  fig <- subplot(y1_fig, y2_fig, nrows = 1)
+  y1_fig
+}
+
 # Create a combination of m disjoint sets of k elements each from the original set n
 # It will only create 1 combination, not all the existing ones like a leave-3-out cross-validation
 cross_sets <- function(n, k){
