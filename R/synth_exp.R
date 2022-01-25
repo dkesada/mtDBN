@@ -10,10 +10,11 @@ main_prep_and_run_synth <- function(){
   obj_vars <- "T_1_t_0"
   obj_var_univ <- "T_1"
   obj_var_multiv <- c("T_1","T_2", "S_c", "C_a", "C_p1", "rho_1")
+  prov_ev <- c("m_c_t_0")
 
   full_exp_run(dt = dt, id_var = id_var, obj_vars = obj_vars,
-                     obj_var_univ = obj_var_univ, obj_var_multiv = obj_var_multiv,
-                     res_file = "full_run_synth_results.txt",
-                     mae_file = "full_run_synth_mae.csv", pred_len = 99,
-                     fold_len = 33, seed = 42, size = 2, n_it = 1)
+               obj_var_univ = obj_var_univ, obj_var_multiv = obj_var_multiv,
+               prov_ev = prov_ev, res_file = "full_run_synth_results.txt",
+               mae_file = "full_run_synth_mae.csv", pred_len = 99,
+               fold_len = 33, seed = 42, size = 2, method = "psoho", n_it = 100)
 }

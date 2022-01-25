@@ -326,11 +326,13 @@ mtDBN <- R6::R6Class("mtDBN",
 
       # Operate the M5 smoothing up to the root node
       node <- private$tree_sc$classify_inst(instance)
-      #while(node$p_node != "(root)"){
+
+      #while(is.environment(node$p_node)){
         parent_model <- private$models[[as.character(node$p_node$name)]]
         preds_p <- private$exact_prediction_step(parent_model, vars_pred,
                                                  private$as_named_vector(instance[1, .SD, .SDcols = c(vars_ev, prov_ev)]))
         preds$mu_p <- Map(function(x,y){(node$n * x + k * y) / (node$n + k)}, preds$mu_p, preds_p$mu_p)
+        #preds$mu_p <- Map(function(x,y){(x + y) / (2)}, preds$mu_p, preds_p$mu_p)
         node <- node$p_node
       #}
 
