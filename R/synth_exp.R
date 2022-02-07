@@ -16,5 +16,5 @@ main_prep_and_run_synth <- function(){
                obj_var_univ = obj_var_univ, obj_var_multiv = obj_var_multiv,
                prov_ev = prov_ev, res_file = "full_run_synth_results.txt",
                mae_file = "full_run_synth_mae.csv", pred_len = 99,
-               fold_len = 33, seed = 42, size = 2, method = "psoho", n_it = 100)
+               fold_len = 33, seed = 42, size = 2, method = "natPsoho", n_it = 70)
 }
