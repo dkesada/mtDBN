@@ -27,6 +27,7 @@ mtDBN <- R6::R6Class("mtDBN",
       if(mv && !requireNamespace("mvpart", quietly = TRUE))
         stop("The package 'mvpart' is needed in order to build multivariate trees. You can install it via devtools::install_github('cran/mvpart')")
 
+      browser()
       private$homogen <- homogen
       private$adjust_tree(dt_train, obj_var, mv, prune_val, min_ind, inc, max_depth)
       private$fit_leaves(dt_train, size, method, f_dt, ...)
