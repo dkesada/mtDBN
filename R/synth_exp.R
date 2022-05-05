@@ -15,6 +15,6 @@ main_prep_and_run_synth <- function(){
   full_exp_run(dt = dt, id_var = id_var, obj_vars = obj_vars,
                obj_var_univ = obj_var_univ, obj_var_multiv = obj_var_multiv,
                prov_ev = prov_ev, res_file = "full_run_synth_results.txt",
-               mae_file = "full_run_synth_mae.csv", pred_len = 99,
+               mae_file = "full_run_synth_mae.csv", mape_file = "full_run_synth_mape.csv", pred_len = 99,
                fold_len = 33, seed = 42, size = 2, method = "psoho", n_it = 100)
 }

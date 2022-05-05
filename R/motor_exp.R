@@ -13,7 +13,7 @@ main_prep_and_run_motor <- function(){
   full_exp_run(dt = dt, id_var = id_var, obj_vars = obj_vars,
                obj_var_univ = obj_var_univ, obj_var_multiv = obj_var_multiv,
                prov_ev = prov_ev, res_file = "full_run_motor_results.txt",
-               mae_file = "full_run_motor_mae.csv", pred_len = 20,
+               mae_file = "full_run_motor_mae.csv", mape_file = "full_run_motor_mape.csv", pred_len = 20,
                fold_len = 3, seed = 42, size = 3, method = "natPsoho", n_it = 100)
 }
 
