@@ -6,5 +6,10 @@
 *.dll
 *.Rproj
 *.ps
+*.csv
+*.txt
+*.html
+*.pdf
+*.Rdata
 CRAN-RELEASE
 dataset/
