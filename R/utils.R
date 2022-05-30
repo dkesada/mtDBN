@@ -223,6 +223,16 @@ mape <- function(orig, pred){
   return((100/length(orig)) * sum(abs((orig - pred) / orig)))
 }
 
+max_min_norm <- function(dt, cols = names(dt)){
+  min_vals <- dt[, sapply(.SD, min), .SDcols = cols]
+  max_vals <- dt[, sapply(.SD, max), .SDcols = cols]
+  
+  for(v in cols)
+    dt[, (v) := (get(v) - min_vals[v]) / (max_vals[v] - min_vals[v])]
+  
+  return(list(max_vals = max_vals, min_vals = min_vals))
+}
+
 # Experiment pipeline functions
 
 forecast_cycle_intervals_single <- function(f_dt_test, model_fit, id_var, size, obj_vars, prov_ev, pred_len){
