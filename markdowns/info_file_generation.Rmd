@@ -13,10 +13,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 When performing the experiments in R for the DBN and mtDBN models, a cross-validation is performed and the dataset is divided into several train+tests subsets. To translate this to the LSTM and HFCM models we generate json files with the exact subsets that were used in the DBN and mtDBN seeded cases.
 
-First of all, we have to start any of the `main_prep_and_run` functions and debug it with either a `browser()` or a break point just after the call to `cv_sets <- cross_sets(dt[, unique(get(id_var))], fold_len)`. In this example, we simulate how to generate the info file for the stock experiment.
+First of all, we have to start any of the `main_prep_and_run` functions and debug it with either a `browser()` or a break point just after the call to `cv_sets <- cross_sets(dt[, unique(get(id_var))], fold_len)`. In this example, we simulate how to generate the info file for the motor experiment.
 
 ```{r initial_call, eval=FALSE}
-mtDBN::main_prep_and_run_stock() # Debug until the cv_sets var is generated
+mtDBN::main_prep_and_run_motor() # Debug until the cv_sets var is generated
 ```
 
 At that point, we are interested in saving the cross-validation sets generated:
@@ -29,8 +29,10 @@ save(cv_sets, cycs, file = "cv_sets.Rdata")
 After we generate the .Rdata with this information, we can go ahead and close the debugger. Once closed, we just load the aforementioned subsets and generate the json file with all the necessary information:
 
 ```{r save_info_json, eval=FALSE}
+load("cv_sets.Rdata")
+
 test_val <- c()
-size <- floor(0.1*(length(cycs)-length(cv_sets[[1]])))
+size <- floor(0.1*(length(cycs)-length(cv_sets[[1]]))) # We need at least 2 instances in validation, so the 0.1 should be 0.15 in stock
 
 set.seed(42)
 for(test in cv_sets){
@@ -40,8 +42,8 @@ for(test in cv_sets){
 }
 set.seed(NULL)
 
-res <- list(obj_var = "Open", idx_cyc = "Date", cv = test_val)
-jsonlite::write_json(res, "exec_info_stock.txt", auto_unbox=T)
+res <- list(obj_var = "pm", idx_cyc = "profile_id", cv = test_val)
+jsonlite::write_json(res, "exec_info_motor.txt", auto_unbox=T)
 ```
 
 Appart from the train and test sets, we need to extract a validation subset from the remaining train instances for the LSTM model. This is fixed to a 0.1 percent of the train instances, but it could be modified. Lastly, a json file is generated with the cv sets and the additional info of the objective variable name and the index variable (the one that identifies the different independent cycles of time-series in the data) name. Notice the `auto_unbox=T` in the `write_json` function, it is important to store the list properly in the json file.
