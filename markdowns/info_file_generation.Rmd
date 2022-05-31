@@ -1,0 +1,48 @@
+---
+title: "Generate exec_info files"
+author: "David Quesada"
+date: "31/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Generation of exec_info files for kTsnn and HFCM
+
+When performing the experiments in R for the DBN and mtDBN models, a cross-validation is performed and the dataset is divided into several train+tests subsets. To translate this to the LSTM and HFCM models we generate json files with the exact subsets that were used in the DBN and mtDBN seeded cases.
+
+First of all, we have to start any of the `main_prep_and_run` functions and debug it with either a `browser()` or a break point just after the call to `cv_sets <- cross_sets(dt[, unique(get(id_var))], fold_len)`. In this example, we simulate how to generate the info file for the stock experiment.
+
+```{r initial_call, eval=FALSE}
+mtDBN::main_prep_and_run_stock() # Debug until the cv_sets var is generated
+```
+
+At that point, we are interested in saving the cross-validation sets generated:
+
+```{r save_sets, eval=FALSE}
+cycs <- dt[,unique(get(id_var))]
+save(cv_sets, cycs, file = "cv_sets.Rdata")
+```
+
+After we generate the .Rdata with this information, we can go ahead and close the debugger. Once closed, we just load the aforementioned subsets and generate the json file with all the necessary information:
+
+```{r save_info_json, eval=FALSE}
+test_val <- c()
+size <- floor(0.1*(length(cycs)-length(cv_sets[[1]])))
+
+set.seed(42)
+for(test in cv_sets){
+	ids <- cycs[!(cycs %in% test)]
+	val <- sample(ids, size)
+	test_val <- c(test_val, list(list(test=test, val=val)))
+}
+set.seed(NULL)
+
+res <- list(obj_var = "Open", idx_cyc = "Date", cv = test_val)
+jsonlite::write_json(res, "exec_info_stock.txt", auto_unbox=T)
+```
+
+Appart from the train and test sets, we need to extract a validation subset from the remaining train instances for the LSTM model. This is fixed to a 0.1 percent of the train instances, but it could be modified. Lastly, a json file is generated with the cv sets and the additional info of the objective variable name and the index variable (the one that identifies the different independent cycles of time-series in the data) name. Notice the `auto_unbox=T` in the `write_json` function, it is important to store the list properly in the json file.
+

@@ -1,6 +1,6 @@
 #' @export
 main_prep_and_run_stock <- function(){
-  dt <- data.table::fread("./dataset/TWII_1y.csv") # 0.5 secs between rows
+  dt <- data.table::fread("./dataset/TWII_1y.csv") # 1 day between rows
   id_var <- "Date" # We will crossvalidate based on the months
   
   dt[, Date := unlist(strsplit(as.character(dt$Date), "-[0-9]*$"))] # We leave only the year and month of the dates for making CV groups
@@ -11,7 +11,7 @@ main_prep_and_run_stock <- function(){
   obj_var_multiv <- c("Open", "Volume")
   prov_ev <- NULL
   # max_min_vals <- max_min_norm(dt, names(dt)[-1])
-  dt[, Adj_Close := NULL] # Exactly the same as Close
+  dt[, Adj_Close := NULL] # Exactly the same as Close. Correlations of 1 break the inference process
     
   full_exp_run(dt = dt, id_var = id_var, obj_vars = obj_vars,
                obj_var_univ = obj_var_univ, obj_var_multiv = obj_var_multiv,
