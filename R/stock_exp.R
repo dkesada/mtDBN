@@ -8,7 +8,7 @@ main_prep_and_run_stock <- function(){
   setnames(dt, "Adj Close", "Adj_Close")
   obj_vars <- "Open_t_0"
   obj_var_univ <- "Open"
-  obj_var_multiv <- c("Open", "Volume")
+  obj_var_multiv <- c("Open", "Close", "Volume")
   prov_ev <- NULL
   # max_min_vals <- max_min_norm(dt, names(dt)[-1])
   dt[, Adj_Close := NULL] # Exactly the same as Close. Correlations of 1 break the inference process
