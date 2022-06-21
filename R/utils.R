@@ -434,3 +434,26 @@ recover_results <- function(){
 
   return(res_matrix)
 }
+
+# To recover the results from the LSTM 
+recover_results_external <- function(res_file){
+  res_matrix <- matrix(nrow = 1000, ncol = 2, 0) # I do not know the total length, but its higher bound is 1000
+  idx_mae <- 1
+  idx_mape <- 1
+  regex_mae <- "^MAE: +[[:digit:]|[:punct:]]+$"
+  regex_mape <- "^MAPE: +[[:digit:]|[:punct:]]+$"
+  
+  for(line in readLines(res_file)){
+    if(length(grep(regex_mae, line))){
+      res_matrix[idx_mae, 1] <- as.numeric(strsplit(line," +")[[1]][2])
+      idx_mae <- idx_mae + 1
+    }
+    
+    else if(length(grep(regex_mape, line))){
+      res_matrix[idx_mape, 2] <- as.numeric(strsplit(line," +")[[1]][2])
+      idx_mape <- idx_mape + 1
+    }
+  }
+  
+  return(res_matrix[1:(idx_mae-1),])
+}
