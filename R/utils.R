@@ -438,6 +438,7 @@ recover_results <- function(){
 # To recover the results from the LSTM 
 recover_results_external <- function(res_file){
   res_matrix <- matrix(nrow = 1000, ncol = 2, 0) # I do not know the total length, but its higher bound is 1000
+  colnames(res_matrix) <- c("MAE", "MAPE")
   idx_mae <- 1
   idx_mape <- 1
   regex_mae <- "^MAE: +[[:digit:]|[:punct:]]+$"
@@ -455,5 +456,5 @@ recover_results_external <- function(res_file){
     }
   }
   
-  return(res_matrix[1:(idx_mae-1),])
+  return(as.data.table(res_matrix[1:(idx_mae-1),]))
 }
