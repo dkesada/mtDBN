@@ -395,8 +395,6 @@ full_exp_run <- function(dt, id_var, obj_vars, obj_var_univ, obj_var_multiv,
 
   for(i in 1:length(cv_sets)){
     message(paste0("Currently on the fold number ", i, " out of ", length(cv_sets)))
-    if(i == 5)
-      browser()
     res_tmp <- train_test_iteration(dt, id_var, cv_sets[[i]], obj_vars, obj_var_univ,
                                     obj_var_multiv, prov_ev, size, method, min_ind, max_depth,
                                     n_it, n_ind, gb_cte, lb_cte, cte, r_probs,
